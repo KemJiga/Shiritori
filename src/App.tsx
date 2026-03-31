@@ -1,357 +1,289 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
+import { LobbyPage } from './components/lobby/LobbyPage';
+import { WaitingRoom } from './components/room/WaitingRoom';
 import { usePeer } from './network/hooks/usePeer';
 import { useHost } from './network/hooks/useHost';
 import { useClient } from './network/hooks/useClient';
-import type { PeerMessage } from './network/protocol';
 import { createMessage } from './network/protocol';
+import type { PeerMessage } from './network/protocol';
+import type { Player } from './game/types';
+import { generateGameId, buildInviteUrl } from './utils/id';
 
-type Role = 'none' | 'host' | 'client';
+type AppScreen = 'lobby' | 'connecting' | 'waiting' | 'playing' | 'finished';
+type Role = 'host' | 'client';
 
-interface LogEntry {
-  timestamp: string;
-  sender: string;
-  text: string;
-  isSelf: boolean;
+interface SessionInfo {
+  role: Role;
+  playerName: string;
+  gameId: string;
 }
 
 function App() {
-  const [role, setRole] = useState<Role>('none');
-  const [playerName, setPlayerName] = useState('');
-  const [hostIdInput, setHostIdInput] = useState('');
-  const [messageLog, setMessageLog] = useState<LogEntry[]>([]);
+  const [screen, setScreen] = useState<AppScreen>('lobby');
+  const [session, setSession] = useState<SessionInfo | null>(null);
 
-  const appendLog = (sender: string, text: string, isSelf = false) => {
-    setMessageLog((prev) => [
-      ...prev,
-      { timestamp: new Date().toLocaleTimeString(), sender, text, isSelf },
-    ]);
-  };
+  const handleCreateGame = useCallback((playerName: string) => {
+    const gameId = generateGameId();
+    setSession({ role: 'host', playerName, gameId });
+    setScreen('connecting');
+  }, []);
 
-  const handleReset = () => {
-    setRole('none');
-    setMessageLog([]);
-  };
+  const handleJoinGame = useCallback((playerName: string, gameId: string) => {
+    setSession({ role: 'client', playerName, gameId });
+    setScreen('connecting');
+  }, []);
+
+  const handleLeave = useCallback(() => {
+    setSession(null);
+    setScreen('lobby');
+    window.history.replaceState({}, '', window.location.pathname);
+  }, []);
+
+  if (screen === 'lobby' || !session) {
+    return (
+      <LobbyPage onCreateGame={handleCreateGame} onJoinGame={handleJoinGame} />
+    );
+  }
+
+  if (session.role === 'host') {
+    return (
+      <HostSession
+        session={session}
+        screen={screen}
+        setScreen={setScreen}
+        onLeave={handleLeave}
+      />
+    );
+  }
 
   return (
-    <div className="min-h-screen bg-gray-950 text-gray-100 p-8">
-      <h1 className="text-3xl font-bold mb-6">Shiritori - Connection Test</h1>
-
-      {role === 'none' && (
-        <RoleSelector
-          playerName={playerName}
-          setPlayerName={setPlayerName}
-          hostIdInput={hostIdInput}
-          setHostIdInput={setHostIdInput}
-          onHost={() => {
-            if (playerName.trim()) setRole('host');
-          }}
-          onJoin={() => {
-            if (playerName.trim() && hostIdInput.trim()) setRole('client');
-          }}
-        />
-      )}
-
-      {role === 'host' && (
-        <HostPanel playerName={playerName.trim()} appendLog={appendLog} />
-      )}
-      {role === 'client' && (
-        <ClientPanel
-          playerName={playerName.trim()}
-          hostId={hostIdInput.trim()}
-          appendLog={appendLog}
-        />
-      )}
-
-      {role !== 'none' && (
-        <div className="mt-8">
-          <h2 className="text-xl font-semibold mb-2">Message Log</h2>
-          <MessageLog entries={messageLog} />
-          <button
-            className="mt-4 px-4 py-2 bg-red-600 hover:bg-red-700 rounded text-sm"
-            onClick={handleReset}
-          >
-            Disconnect &amp; Reset
-          </button>
-        </div>
-      )}
-    </div>
+    <ClientSession
+      session={session}
+      screen={screen}
+      setScreen={setScreen}
+      onLeave={handleLeave}
+    />
   );
 }
 
-function MessageLog({ entries }: { entries: LogEntry[] }) {
-  const bottomRef = useRef<HTMLDivElement>(null);
+function HostSession({
+  session,
+  screen,
+  setScreen,
+  onLeave,
+}: {
+  session: SessionInfo;
+  screen: AppScreen;
+  setScreen: (s: AppScreen) => void;
+  onLeave: () => void;
+}) {
+  const { peer, peerId, error, isReady } = usePeer(session.gameId);
+  const [players, setPlayers] = useState<Player[]>([]);
+  const playersRef = useRef<Player[]>([]);
+
+  const addPlayer = useCallback((id: string, name: string) => {
+    setPlayers((prev) => {
+      if (prev.some((p) => p.id === id)) return prev;
+      const updated = [
+        ...prev,
+        { id, name, score: 0, lives: 0, status: 'connected' as const },
+      ];
+      playersRef.current = updated;
+      return updated;
+    });
+  }, []);
+
+  const handleMessage = useCallback(
+    (msg: PeerMessage, senderId: string) => {
+      if (msg.type === 'player_join') {
+        addPlayer(senderId, msg.payload.name);
+      }
+    },
+    [addPlayer],
+  );
+
+  const { broadcast } = useHost(peer, handleMessage);
+  const broadcastRef = useRef(broadcast);
+  broadcastRef.current = broadcast;
 
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [entries]);
-
-  return (
-    <div className="bg-gray-900 rounded-lg p-4 h-64 overflow-y-auto text-sm space-y-1">
-      {entries.length === 0 ? (
-        <p className="text-gray-500">No messages yet...</p>
-      ) : (
-        entries.map((entry, i) => (
-          <p key={i}>
-            <span className="text-gray-500">[{entry.timestamp}]</span>{' '}
-            <span className={entry.isSelf ? 'text-indigo-400' : 'text-emerald-400'}>
-              {entry.sender}:
-            </span>{' '}
-            <span className="text-gray-200">{entry.text}</span>
-          </p>
-        ))
-      )}
-      <div ref={bottomRef} />
-    </div>
-  );
-}
-
-function RoleSelector({
-  playerName,
-  setPlayerName,
-  hostIdInput,
-  setHostIdInput,
-  onHost,
-  onJoin,
-}: {
-  playerName: string;
-  setPlayerName: (v: string) => void;
-  hostIdInput: string;
-  setHostIdInput: (v: string) => void;
-  onHost: () => void;
-  onJoin: () => void;
-}) {
-  return (
-    <div className="space-y-6 max-w-md">
-      <div className="bg-gray-900 rounded-lg p-6">
-        <h2 className="text-xl font-semibold mb-4">Your Name</h2>
-        <input
-          type="text"
-          placeholder="Enter your display name"
-          value={playerName}
-          onChange={(e) => setPlayerName(e.target.value)}
-          className="w-full px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg text-gray-100 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-          maxLength={20}
-        />
-      </div>
-
-      <div className="bg-gray-900 rounded-lg p-6">
-        <h2 className="text-xl font-semibold mb-4">Create a Game (Host)</h2>
-        <button
-          className="px-6 py-3 bg-indigo-600 hover:bg-indigo-700 rounded-lg font-medium disabled:opacity-40"
-          disabled={!playerName.trim()}
-          onClick={onHost}
-        >
-          Start as Host
-        </button>
-      </div>
-
-      <div className="bg-gray-900 rounded-lg p-6">
-        <h2 className="text-xl font-semibold mb-4">Join a Game (Client)</h2>
-        <input
-          type="text"
-          placeholder="Enter Host Peer ID"
-          value={hostIdInput}
-          onChange={(e) => setHostIdInput(e.target.value)}
-          className="w-full px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg mb-3 text-gray-100 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-        />
-        <button
-          className="px-6 py-3 bg-emerald-600 hover:bg-emerald-700 rounded-lg font-medium disabled:opacity-40"
-          disabled={!playerName.trim() || !hostIdInput.trim()}
-          onClick={onJoin}
-        >
-          Connect to Host
-        </button>
-      </div>
-    </div>
-  );
-}
-
-function HostPanel({
-  playerName,
-  appendLog,
-}: {
-  playerName: string;
-  appendLog: (sender: string, text: string, isSelf?: boolean) => void;
-}) {
-  const { peer, peerId, error, isReady } = usePeer();
-  const [testMsg, setTestMsg] = useState('');
-  const [peerNames, setPeerNames] = useState<Map<string, string>>(new Map());
-
-  const handleMessage = (msg: PeerMessage, senderId: string) => {
-    if (msg.type === 'chat') {
-      appendLog(msg.payload.senderName, msg.payload.text);
-      const fwd = createMessage('chat', msg.payload);
-      hostManagerRef.current?.broadcast(fwd);
-    } else if (msg.type === 'player_join') {
-      setPeerNames((prev) => new Map(prev).set(senderId, msg.payload.name));
-      appendLog('System', `${msg.payload.name} joined`);
+    if (isReady && peerId) {
+      addPlayer(peerId, session.playerName);
+      setScreen('waiting');
     }
-  };
+  }, [isReady, peerId, session.playerName, addPlayer, setScreen]);
 
-  const { connectedPeers, broadcast, hostManager } = useHost(peer, handleMessage);
-  const hostManagerRef = useRef(hostManager);
-  hostManagerRef.current = hostManager;
+  useEffect(() => {
+    broadcastRef.current(
+      createMessage('state_sync', {
+        state: {
+          gameId: session.gameId,
+          hostId: session.gameId,
+          phase: 'waiting',
+          settings: {
+            mode: 'score',
+            initialScore: 100,
+            minWordLength: 2,
+            maxWordLength: 0,
+            initialLives: 3,
+            turnTimerSeconds: 15,
+          },
+          players: playersRef.current,
+          turnOrder: [],
+          currentTurnIndex: 0,
+          wordHistory: [],
+          lastWord: null,
+          turnDeadline: null,
+          eliminatedPlayers: [],
+          winner: null,
+        },
+      }),
+    );
+  }, [players, session.gameId]);
 
   if (error) {
-    return <p className="text-red-400">Error: {error}</p>;
+    return (
+      <div className="min-h-screen bg-gray-950 text-gray-100 flex items-center justify-center p-6">
+        <div className="text-center space-y-4">
+          <p className="text-red-400 text-lg">Failed to create game: {error}</p>
+          <button
+            onClick={onLeave}
+            className="px-6 py-3 bg-gray-800 hover:bg-gray-700 rounded-lg transition-colors"
+          >
+            Back to Lobby
+          </button>
+        </div>
+      </div>
+    );
   }
 
-  if (!isReady) {
-    return <p className="text-yellow-400">Connecting to PeerJS server...</p>;
+  if (screen === 'connecting' || !peerId) {
+    return (
+      <div className="min-h-screen bg-gray-950 text-gray-100 flex items-center justify-center">
+        <p className="text-yellow-400 text-lg animate-pulse">Creating game...</p>
+      </div>
+    );
   }
 
-  const handleSend = () => {
-    if (!testMsg.trim()) return;
-    const msg = createMessage('chat', {
-      senderId: peerId!,
-      senderName: playerName,
-      text: testMsg,
-    });
-    broadcast(msg);
-    appendLog(playerName, testMsg, true);
-    setTestMsg('');
-  };
+  if (screen === 'waiting') {
+    return (
+      <WaitingRoom
+        gameId={session.gameId}
+        inviteUrl={buildInviteUrl(session.gameId)}
+        players={players}
+        localPlayerId={peerId}
+        isHost={true}
+        onStartGame={() => {
+          // Phase 5 will implement this
+        }}
+        onLeave={onLeave}
+      />
+    );
+  }
 
-  return (
-    <div className="space-y-4">
-      <div className="bg-gray-900 rounded-lg p-4">
-        <p className="text-sm text-gray-400">
-          Playing as: <span className="text-indigo-400 font-medium">{playerName}</span>
-        </p>
-        <p className="text-sm text-gray-400 mt-1">Your Peer ID (share with clients):</p>
-        <p className="text-lg font-mono text-indigo-400 select-all">{peerId}</p>
-      </div>
-
-      <div className="bg-gray-900 rounded-lg p-4">
-        <p className="text-sm text-gray-400 mb-2">
-          Connected players: {connectedPeers.length}
-        </p>
-        {connectedPeers.length === 0 ? (
-          <p className="text-gray-500 text-sm">Waiting for players to join...</p>
-        ) : (
-          <div className="flex flex-wrap gap-2">
-            {connectedPeers.map((id) => (
-              <span
-                key={id}
-                className="inline-block bg-gray-800 rounded px-3 py-1 text-sm"
-              >
-                {peerNames.get(id) ?? id.slice(0, 8)}
-              </span>
-            ))}
-          </div>
-        )}
-      </div>
-
-      <div className="flex gap-2 max-w-md">
-        <input
-          type="text"
-          placeholder="Type a message..."
-          value={testMsg}
-          onChange={(e) => setTestMsg(e.target.value)}
-          onKeyDown={(e) => e.key === 'Enter' && handleSend()}
-          className="flex-1 px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg text-gray-100 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-        />
-        <button
-          className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 rounded-lg font-medium disabled:opacity-40"
-          disabled={!testMsg.trim() || connectedPeers.length === 0}
-          onClick={handleSend}
-        >
-          Send
-        </button>
-      </div>
-    </div>
-  );
+  return null;
 }
 
-function ClientPanel({
-  playerName,
-  hostId,
-  appendLog,
+function ClientSession({
+  session,
+  screen,
+  setScreen,
+  onLeave,
 }: {
-  playerName: string;
-  hostId: string;
-  appendLog: (sender: string, text: string, isSelf?: boolean) => void;
+  session: SessionInfo;
+  screen: AppScreen;
+  setScreen: (s: AppScreen) => void;
+  onLeave: () => void;
 }) {
   const { peer, peerId, error: peerError, isReady } = usePeer();
-  const [testMsg, setTestMsg] = useState('');
+  const [players, setPlayers] = useState<Player[]>([]);
   const sentJoinRef = useRef(false);
 
-  const handleMessage = (msg: PeerMessage) => {
-    if (msg.type === 'chat') {
-      if (msg.payload.senderId === peerId) return;
-      appendLog(msg.payload.senderName, msg.payload.text);
-    }
-  };
+  const handleMessage = useCallback(
+    (msg: PeerMessage) => {
+      if (msg.type === 'state_sync') {
+        setPlayers(msg.payload.state.players);
+        if (msg.payload.state.phase === 'waiting') {
+          setScreen('waiting');
+        }
+      } else if (msg.type === 'error') {
+        console.error('Host error:', msg.payload.message);
+      }
+    },
+    [setScreen],
+  );
 
-  const { status, send } = useClient(isReady ? peer : null, hostId, handleMessage);
+  const { status, send } = useClient(
+    isReady ? peer : null,
+    session.gameId,
+    handleMessage,
+  );
 
   useEffect(() => {
     if (status === 'connected' && peerId && !sentJoinRef.current) {
       sentJoinRef.current = true;
-      send(createMessage('player_join', { playerId: peerId, name: playerName }));
+      send(createMessage('player_join', { playerId: peerId, name: session.playerName }));
     }
-  }, [status, peerId, playerName, send]);
+  }, [status, peerId, session.playerName, send]);
 
   if (peerError) {
-    return <p className="text-red-400">Peer error: {peerError}</p>;
-  }
-
-  if (!isReady) {
-    return <p className="text-yellow-400">Initializing peer...</p>;
-  }
-
-  const statusColors: Record<string, string> = {
-    connecting: 'text-yellow-400',
-    connected: 'text-green-400',
-    disconnected: 'text-gray-400',
-    failed: 'text-red-400',
-  };
-
-  const handleSend = () => {
-    if (!testMsg.trim()) return;
-    const msg = createMessage('chat', {
-      senderId: peerId!,
-      senderName: playerName,
-      text: testMsg,
-    });
-    send(msg);
-    appendLog(playerName, testMsg, true);
-    setTestMsg('');
-  };
-
-  return (
-    <div className="space-y-4">
-      <div className="bg-gray-900 rounded-lg p-4">
-        <p className="text-sm text-gray-400">
-          Playing as: <span className="text-emerald-400 font-medium">{playerName}</span>
-        </p>
-        <p className="text-sm text-gray-400 mt-1">
-          Connection to host:{' '}
-          <span className={statusColors[status] ?? 'text-gray-400'}>{status}</span>
-        </p>
-      </div>
-
-      {status === 'connected' && (
-        <div className="flex gap-2 max-w-md">
-          <input
-            type="text"
-            placeholder="Type a message..."
-            value={testMsg}
-            onChange={(e) => setTestMsg(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && handleSend()}
-            className="flex-1 px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg text-gray-100 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-emerald-500"
-          />
+    return (
+      <div className="min-h-screen bg-gray-950 text-gray-100 flex items-center justify-center p-6">
+        <div className="text-center space-y-4">
+          <p className="text-red-400 text-lg">Connection error: {peerError}</p>
           <button
-            className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 rounded-lg font-medium disabled:opacity-40"
-            disabled={!testMsg.trim()}
-            onClick={handleSend}
+            onClick={onLeave}
+            className="px-6 py-3 bg-gray-800 hover:bg-gray-700 rounded-lg transition-colors"
           >
-            Send
+            Back to Lobby
           </button>
         </div>
-      )}
-    </div>
-  );
+      </div>
+    );
+  }
+
+  if (screen === 'connecting' || status !== 'connected') {
+    const label =
+      status === 'failed'
+        ? 'Could not connect to game. The game may not exist.'
+        : 'Connecting to game...';
+
+    return (
+      <div className="min-h-screen bg-gray-950 text-gray-100 flex items-center justify-center p-6">
+        <div className="text-center space-y-4">
+          <p
+            className={`text-lg ${status === 'failed' ? 'text-red-400' : 'text-yellow-400 animate-pulse'}`}
+          >
+            {label}
+          </p>
+          {status === 'failed' && (
+            <button
+              onClick={onLeave}
+              className="px-6 py-3 bg-gray-800 hover:bg-gray-700 rounded-lg transition-colors"
+            >
+              Back to Lobby
+            </button>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  if (screen === 'waiting' && peerId) {
+    return (
+      <WaitingRoom
+        gameId={session.gameId}
+        inviteUrl={buildInviteUrl(session.gameId)}
+        players={players}
+        localPlayerId={peerId}
+        isHost={false}
+        onStartGame={() => {}}
+        onLeave={onLeave}
+      />
+    );
+  }
+
+  return null;
 }
 
 export default App;
