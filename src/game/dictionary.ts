@@ -1,4 +1,3 @@
-// @ts-expect-error — package exports a JSON array with no type declarations
 import spanishWords from 'an-array-of-spanish-words';
 
 export type GameLanguage = 'es';
