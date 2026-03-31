@@ -1,3 +1,4 @@
+import { useState, useEffect } from 'react';
 import type { GameSettings as GameSettingsType } from '../../game/types';
 
 interface GameSettingsProps {
@@ -149,17 +150,33 @@ function NumberInput({
   disabled: boolean;
   onChange: (v: number) => void;
 }) {
+  const [localValue, setLocalValue] = useState(String(value));
+
+  useEffect(() => {
+    setLocalValue(String(value));
+  }, [value]);
+
+  const commit = (raw: string) => {
+    const v = Number(raw);
+    if (!isNaN(v) && v >= min && v <= max) {
+      onChange(v);
+    } else {
+      setLocalValue(String(value));
+    }
+  };
+
   return (
     <input
       type="number"
-      value={value}
+      value={localValue}
       min={min}
       max={max}
       step={step}
       disabled={disabled}
-      onChange={(e) => {
-        const v = Number(e.target.value);
-        if (!isNaN(v) && v >= min && v <= max) onChange(v);
+      onChange={(e) => setLocalValue(e.target.value)}
+      onBlur={() => commit(localValue)}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter') commit(localValue);
       }}
       className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-gray-100 disabled:opacity-60 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-indigo-500"
     />
