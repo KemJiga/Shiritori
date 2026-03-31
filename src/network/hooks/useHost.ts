@@ -3,6 +3,12 @@ import type Peer from 'peerjs';
 import { HostManager } from '../host';
 import type { PeerMessage } from '../protocol';
 
+interface UseHostCallbacks {
+  onMessage?: (message: PeerMessage, senderId: string) => void;
+  onPeerConnected?: (peerId: string) => void;
+  onPeerDisconnected?: (peerId: string) => void;
+}
+
 interface UseHostResult {
   hostManager: HostManager | null;
   connectedPeers: string[];
@@ -12,12 +18,12 @@ interface UseHostResult {
 
 export function useHost(
   peer: Peer | null,
-  onMessage?: (message: PeerMessage, senderId: string) => void,
+  callbacks?: UseHostCallbacks,
 ): UseHostResult {
   const [connectedPeers, setConnectedPeers] = useState<string[]>([]);
   const managerRef = useRef<HostManager | null>(null);
-  const onMessageRef = useRef(onMessage);
-  onMessageRef.current = onMessage;
+  const cbRef = useRef(callbacks);
+  cbRef.current = callbacks;
 
   useEffect(() => {
     if (!peer) return;
@@ -25,16 +31,18 @@ export function useHost(
     const manager = new HostManager(peer);
     managerRef.current = manager;
 
-    manager.setOnPeerConnected(() => {
+    manager.setOnPeerConnected((peerId) => {
       setConnectedPeers(manager.getConnectedPeerIds());
+      cbRef.current?.onPeerConnected?.(peerId);
     });
 
-    manager.setOnPeerDisconnected(() => {
+    manager.setOnPeerDisconnected((peerId) => {
       setConnectedPeers(manager.getConnectedPeerIds());
+      cbRef.current?.onPeerDisconnected?.(peerId);
     });
 
     manager.setOnMessage((msg, senderId) => {
-      onMessageRef.current?.(msg, senderId);
+      cbRef.current?.onMessage?.(msg, senderId);
     });
 
     return () => {

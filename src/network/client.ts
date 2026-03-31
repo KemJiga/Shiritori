@@ -26,8 +26,18 @@ export class ClientManager {
 
   connect(): void {
     this.setStatus('connecting');
-    const conn = this.peer.connect(this.hostId, { reliable: true });
-    this.setupConnection(conn);
+    try {
+      const conn = this.peer.connect(this.hostId, { reliable: true });
+      if (!conn) {
+        this.setStatus('disconnected');
+        this.attemptReconnect();
+        return;
+      }
+      this.setupConnection(conn);
+    } catch {
+      this.setStatus('disconnected');
+      this.attemptReconnect();
+    }
   }
 
   private setupConnection(conn: DataConnection): void {

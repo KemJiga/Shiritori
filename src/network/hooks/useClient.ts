@@ -22,21 +22,30 @@ export function useClient(
   onMessageRef.current = onMessage;
 
   useEffect(() => {
-    if (!peer || !hostId) return;
+    if (!peer || !hostId || peer.destroyed) return;
 
-    const manager = new ClientManager(peer, hostId);
-    managerRef.current = manager;
+    const startConnection = () => {
+      const manager = new ClientManager(peer, hostId);
+      managerRef.current = manager;
 
-    manager.setOnStatusChange(setStatus);
-    manager.setOnMessage((msg) => {
-      setLastMessage(msg);
-      onMessageRef.current?.(msg);
-    });
+      manager.setOnStatusChange(setStatus);
+      manager.setOnMessage((msg) => {
+        setLastMessage(msg);
+        onMessageRef.current?.(msg);
+      });
 
-    manager.connect();
+      manager.connect();
+    };
+
+    if (peer.open) {
+      startConnection();
+    } else {
+      peer.on('open', startConnection);
+    }
 
     return () => {
-      manager.destroy();
+      peer.off('open', startConnection);
+      managerRef.current?.destroy();
       managerRef.current = null;
     };
   }, [peer, hostId]);
