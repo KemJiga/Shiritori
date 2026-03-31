@@ -5,7 +5,9 @@ interface GameOverScreenProps {
   settings: GameSettings;
   winnerId: string | null;
   localPlayerId: string;
+  isHost: boolean;
   onBackToLobby: () => void;
+  onBackToWaiting?: () => void;
 }
 
 export function GameOverScreen({
@@ -13,7 +15,9 @@ export function GameOverScreen({
   settings,
   winnerId,
   localPlayerId,
+  isHost,
   onBackToLobby,
+  onBackToWaiting,
 }: GameOverScreenProps) {
   const winner = players.find((p) => p.id === winnerId);
   const isLocalWinner = winnerId === localPlayerId;
@@ -73,12 +77,27 @@ export function GameOverScreen({
           </div>
         </div>
 
-        <button
-          onClick={onBackToLobby}
-          className="w-full px-6 py-3 bg-indigo-600 hover:bg-indigo-700 rounded-lg font-medium text-lg transition-colors"
-        >
-          Back to Lobby
-        </button>
+        <div className="space-y-3">
+          {isHost && onBackToWaiting && (
+            <button
+              onClick={onBackToWaiting}
+              className="w-full px-6 py-3 bg-indigo-600 hover:bg-indigo-700 rounded-lg font-medium text-lg transition-colors"
+            >
+              Play Again
+            </button>
+          )}
+          {!isHost && (
+            <p className="text-gray-400 text-sm">
+              Waiting for host to start a new game...
+            </p>
+          )}
+          <button
+            onClick={onBackToLobby}
+            className="w-full px-6 py-3 bg-gray-800 hover:bg-gray-700 border border-gray-700 rounded-lg font-medium transition-colors"
+          >
+            Leave Game
+          </button>
+        </div>
       </div>
     </div>
   );

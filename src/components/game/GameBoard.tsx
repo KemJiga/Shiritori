@@ -6,15 +6,19 @@ import type { GameState } from '../../game/types';
 interface GameBoardProps {
   state: GameState;
   localPlayerId: string;
+  isHost: boolean;
   moveError: string | null;
   onSubmitWord: (word: string) => void;
+  onEndGame?: () => void;
 }
 
 export function GameBoard({
   state,
   localPlayerId,
+  isHost,
   moveError,
   onSubmitWord,
+  onEndGame,
 }: GameBoardProps) {
   const currentTurnPlayerId = state.turnOrder[state.currentTurnIndex] ?? '';
   const isMyTurn = currentTurnPlayerId === localPlayerId;
@@ -25,10 +29,20 @@ export function GameBoard({
     <div className="min-h-screen bg-gray-950 text-gray-100 flex flex-col">
       <header className="border-b border-gray-800 px-6 py-3 flex items-center justify-between">
         <h1 className="text-lg font-bold">Shiritori</h1>
-        <span className="text-sm text-gray-400">
-          {state.settings.mode === 'score' ? 'Score Mode' : 'Survival Mode'} &middot;
-          Target: {state.settings.targetScore}
-        </span>
+        <div className="flex items-center gap-4">
+          <span className="text-sm text-gray-400">
+            {state.settings.mode === 'score' ? 'Score Mode' : 'Survival Mode'} &middot;
+            Target: {state.settings.targetScore}
+          </span>
+          {isHost && onEndGame && (
+            <button
+              onClick={onEndGame}
+              className="px-3 py-1.5 text-sm bg-gray-800 hover:bg-gray-700 border border-gray-700 rounded-lg transition-colors"
+            >
+              End Game
+            </button>
+          )}
+        </div>
       </header>
 
       <div className="flex-1 flex flex-col lg:flex-row overflow-hidden">

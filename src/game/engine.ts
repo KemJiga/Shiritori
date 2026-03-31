@@ -145,6 +145,25 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
     case 'TIMER_EXPIRED':
       return state;
 
+    case 'RESET_TO_WAITING':
+      return {
+        ...state,
+        phase: 'waiting',
+        turnOrder: [],
+        currentTurnIndex: 0,
+        wordHistory: [],
+        lastWord: null,
+        turnDeadline: null,
+        eliminatedPlayers: [],
+        winner: null,
+        players: state.players.map((p) => ({
+          ...p,
+          score: 0,
+          lives: state.settings.initialLives,
+          status: p.status === 'eliminated' ? 'connected' as const : p.status,
+        })),
+      };
+
     case 'SET_PLAYERS':
       return { ...state, players: action.payload };
 

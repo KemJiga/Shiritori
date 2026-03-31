@@ -10,5 +10,6 @@ export type GameAction =
   | { type: 'START_GAME' }
   | { type: 'SUBMIT_WORD'; payload: { playerId: string; word: string } }
   | { type: 'TIMER_EXPIRED' }
+  | { type: 'RESET_TO_WAITING' }
   | { type: 'SYNC_STATE'; payload: GameState }
   | { type: 'SET_PLAYERS'; payload: Player[] };

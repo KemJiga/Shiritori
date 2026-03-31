@@ -136,6 +136,7 @@ function HostSession({
     if (state.phase !== 'lobby') {
       broadcastRef.current(createMessage('state_sync', { state }));
     }
+    if (state.phase === 'waiting') setScreen('waiting');
     if (state.phase === 'playing') setScreen('playing');
     if (state.phase === 'finished') setScreen('finished');
   }, [state, setScreen]);
@@ -149,6 +150,10 @@ function HostSession({
 
   const handleStartGame = useCallback(() => {
     dispatch({ type: 'START_GAME' });
+  }, [dispatch]);
+
+  const handleEndGame = useCallback(() => {
+    dispatch({ type: 'RESET_TO_WAITING' });
   }, [dispatch]);
 
   const handleHostSubmitWord = useCallback(
@@ -210,8 +215,10 @@ function HostSession({
       <GameBoard
         state={state}
         localPlayerId={peerId}
+        isHost={true}
         moveError={moveError}
         onSubmitWord={handleHostSubmitWord}
+        onEndGame={handleEndGame}
       />
     );
   }
@@ -223,7 +230,9 @@ function HostSession({
         settings={state.settings}
         winnerId={state.winner}
         localPlayerId={peerId}
+        isHost={true}
         onBackToLobby={onLeave}
+        onBackToWaiting={handleEndGame}
       />
     );
   }
@@ -356,6 +365,7 @@ function ClientSession({
       <GameBoard
         state={state}
         localPlayerId={peerId}
+        isHost={false}
         moveError={moveError}
         onSubmitWord={handleClientSubmitWord}
       />
@@ -369,6 +379,7 @@ function ClientSession({
         settings={state.settings}
         winnerId={state.winner}
         localPlayerId={peerId}
+        isHost={false}
         onBackToLobby={onLeave}
       />
     );
