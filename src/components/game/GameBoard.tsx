@@ -28,18 +28,18 @@ export function GameBoard({
   const isSurvival = state.settings.mode === 'survival';
 
   return (
-    <div className="min-h-screen bg-gray-950 text-gray-100 flex flex-col">
-      <header className="border-b border-gray-800 px-6 py-3 flex items-center justify-between">
-        <h1 className="text-lg font-bold">Shiritori</h1>
-        <div className="flex items-center gap-4">
-          <span className="text-sm text-gray-400">
-            {isSurvival ? 'Survival Mode' : 'Score Mode'}
-            {!isSurvival && <> &middot; Target: {state.settings.targetScore}</>}
+    <div className="min-h-screen bg-gray-950 flex flex-col animate-fade-in">
+      <header className="border-b border-gray-800/60 px-4 sm:px-6 py-3 flex items-center justify-between shrink-0">
+        <h1 className="text-lg font-bold tracking-tight">Shiritori</h1>
+        <div className="flex items-center gap-3 sm:gap-4">
+          <span className="text-xs sm:text-sm text-gray-500">
+            {isSurvival ? 'Survival' : 'Score'}
+            {!isSurvival && <span className="hidden sm:inline"> &middot; Target: {state.settings.targetScore}</span>}
           </span>
           {isHost && onEndGame && (
             <button
               onClick={onEndGame}
-              className="px-3 py-1.5 text-sm bg-gray-800 hover:bg-gray-700 border border-gray-700 rounded-lg transition-colors"
+              className="px-3 py-1.5 text-xs sm:text-sm bg-gray-800 hover:bg-gray-700 border border-gray-700 rounded-lg transition-all duration-150 active:scale-[0.97]"
             >
               End Game
             </button>
@@ -48,7 +48,7 @@ export function GameBoard({
       </header>
 
       <div className="flex-1 flex flex-col lg:flex-row overflow-hidden">
-        <aside className="lg:w-64 border-b lg:border-b-0 lg:border-r border-gray-800 p-4 overflow-y-auto">
+        <aside className="lg:w-64 xl:w-72 border-b lg:border-b-0 lg:border-r border-gray-800/60 p-3 sm:p-4 overflow-y-auto shrink-0">
           <ScoreBoard
             players={state.players}
             settings={state.settings}
@@ -57,17 +57,23 @@ export function GameBoard({
           />
         </aside>
 
-        <main className="flex-1 flex flex-col p-4 overflow-hidden">
-          <div className="mb-3 flex items-start justify-between gap-4">
-            <div>
-              <p className={`text-sm font-medium ${isMyTurn ? 'text-indigo-400' : 'text-gray-400'}`}>
+        <main className="flex-1 flex flex-col p-3 sm:p-4 overflow-hidden min-w-0">
+          <div className="mb-3 flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <p
+                className={`text-sm font-semibold transition-colors ${
+                  isMyTurn ? 'text-indigo-400' : 'text-gray-400'
+                }`}
+                role="status"
+                aria-live="polite"
+              >
                 {isMyTurn ? "Your turn!" : `${currentPlayerName}'s turn`}
               </p>
               {state.lastWord && (
-                <p className="text-xs text-gray-500 mt-0.5">
-                  Last word: <span className="text-gray-300 font-mono">{state.lastWord}</span>
-                  {' '}&rarr; next word must start with{' '}
-                  <span className="text-indigo-400 font-bold">
+                <p className="text-xs text-gray-500 mt-0.5 truncate">
+                  Last: <span className="text-gray-400 font-mono">{state.lastWord}</span>
+                  {' '}&#8594; start with{' '}
+                  <span className="text-indigo-400 font-bold text-sm">
                     {state.lastWord[state.lastWord.length - 1].toUpperCase()}
                   </span>
                 </p>
@@ -86,7 +92,7 @@ export function GameBoard({
             players={state.players}
           />
 
-          <div className="border-t border-gray-800 pt-4 mt-4">
+          <div className="border-t border-gray-800/60 pt-3 sm:pt-4 mt-3 sm:mt-4 shrink-0">
             <TurnInput
               isMyTurn={isMyTurn}
               lastWord={state.lastWord}

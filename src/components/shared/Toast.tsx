@@ -31,17 +31,17 @@ interface ToastContainerProps {
   onRemove: (id: number) => void;
 }
 
-const typeStyles: Record<ToastItem['type'], string> = {
-  info: 'bg-gray-800 border-gray-600',
-  error: 'bg-red-900/80 border-red-700',
-  success: 'bg-green-900/80 border-green-700',
+const typeStyles: Record<ToastItem['type'], { bg: string; accent: string }> = {
+  info: { bg: 'bg-gray-900/95 border-gray-700/60', accent: 'bg-indigo-500' },
+  error: { bg: 'bg-gray-900/95 border-red-700/40', accent: 'bg-red-500' },
+  success: { bg: 'bg-gray-900/95 border-emerald-700/40', accent: 'bg-emerald-500' },
 };
 
 export function ToastContainer({ toasts, onRemove }: ToastContainerProps) {
   if (toasts.length === 0) return null;
 
   return (
-    <div className="fixed bottom-4 right-4 z-50 space-y-2">
+    <div className="fixed bottom-4 right-4 z-50 space-y-2" aria-live="polite">
       {toasts.map((toast) => (
         <ToastNotification key={toast.id} toast={toast} onRemove={onRemove} />
       ))}
@@ -57,6 +57,7 @@ function ToastNotification({
   onRemove: (id: number) => void;
 }) {
   const [visible, setVisible] = useState(false);
+  const styles = typeStyles[toast.type];
 
   useEffect(() => {
     requestAnimationFrame(() => setVisible(true));
@@ -64,12 +65,14 @@ function ToastNotification({
 
   return (
     <div
-      className={`border rounded-lg px-4 py-3 shadow-lg max-w-xs transition-all duration-300 cursor-pointer ${
-        typeStyles[toast.type]
-      } ${visible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-2'}`}
+      role="status"
+      className={`backdrop-blur-sm border rounded-xl shadow-xl max-w-xs cursor-pointer transition-all duration-300 overflow-hidden ${
+        styles.bg
+      } ${visible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-3'}`}
       onClick={() => onRemove(toast.id)}
     >
-      <p className="text-sm text-gray-200">{toast.message}</p>
+      <div className={`h-0.5 ${styles.accent}`} />
+      <p className="text-sm text-gray-200 px-4 py-3">{toast.message}</p>
     </div>
   );
 }
