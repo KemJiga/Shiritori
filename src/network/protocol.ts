@@ -9,6 +9,7 @@ export type PeerMessage =
   | { type: 'settings_update'; payload: { settings: Partial<GameSettings> } }
   | { type: 'game_over'; payload: { winnerId: string | null } }
   | { type: 'error'; payload: { message: string } }
+  | { type: 'chat'; payload: { senderId: string; senderName: string; text: string } }
   | { type: 'kick'; payload: { playerId: string } }
   | { type: 'ping'; payload: { timestamp: number } }
   | { type: 'pong'; payload: { timestamp: number } };
