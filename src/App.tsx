@@ -1,12 +1,16 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { LobbyPage } from './components/lobby/LobbyPage';
 import { WaitingRoom } from './components/room/WaitingRoom';
+import { GameBoard } from './components/game/GameBoard';
+import { GameOverScreen } from './components/game/GameOverScreen';
+import { GameProvider, useGame } from './store/GameContext';
 import { usePeer } from './network/hooks/usePeer';
 import { useHost } from './network/hooks/useHost';
 import { useClient } from './network/hooks/useClient';
 import { createMessage } from './network/protocol';
 import type { PeerMessage } from './network/protocol';
-import type { Player } from './game/types';
+import type { GameSettings } from './game/types';
+import { processWord } from './game/engine';
 import { generateGameId, buildInviteUrl } from './utils/id';
 
 type AppScreen = 'lobby' | 'connecting' | 'waiting' | 'playing' | 'finished';
@@ -47,22 +51,26 @@ function App() {
 
   if (session.role === 'host') {
     return (
-      <HostSession
+      <GameProvider gameId={session.gameId} hostId={session.gameId}>
+        <HostSession
+          session={session}
+          screen={screen}
+          setScreen={setScreen}
+          onLeave={handleLeave}
+        />
+      </GameProvider>
+    );
+  }
+
+  return (
+    <GameProvider gameId={session.gameId} hostId={session.gameId}>
+      <ClientSession
         session={session}
         screen={screen}
         setScreen={setScreen}
         onLeave={handleLeave}
       />
-    );
-  }
-
-  return (
-    <ClientSession
-      session={session}
-      screen={screen}
-      setScreen={setScreen}
-      onLeave={handleLeave}
-    />
+    </GameProvider>
   );
 }
 
@@ -78,68 +86,89 @@ function HostSession({
   onLeave: () => void;
 }) {
   const { peer, peerId, error, isReady } = usePeer(session.gameId);
-  const [players, setPlayers] = useState<Player[]>([]);
-  const playersRef = useRef<Player[]>([]);
+  const { state, dispatch } = useGame();
+  const stateRef = useRef(state);
+  stateRef.current = state;
+  const [moveError, setMoveError] = useState<string | null>(null);
 
-  const addPlayer = useCallback((id: string, name: string) => {
-    setPlayers((prev) => {
-      if (prev.some((p) => p.id === id)) return prev;
-      const updated = [
-        ...prev,
-        { id, name, score: 0, lives: 0, status: 'connected' as const },
-      ];
-      playersRef.current = updated;
-      return updated;
-    });
-  }, []);
+  const sendToRef = useRef<(peerId: string, msg: PeerMessage) => void>(() => {});
 
-  const handleMessage = useCallback(
-    (msg: PeerMessage, senderId: string) => {
-      if (msg.type === 'player_join') {
-        addPlayer(senderId, msg.payload.name);
-      }
-    },
-    [addPlayer],
+  const hostCallbacks = useMemo(
+    () => ({
+      onMessage: (msg: PeerMessage, senderId: string) => {
+        switch (msg.type) {
+          case 'player_join':
+            dispatch({ type: 'ADD_PLAYER', payload: { id: senderId, name: msg.payload.name } });
+            break;
+          case 'move': {
+            const result = processWord(stateRef.current, msg.payload.playerId, msg.payload.word);
+            if (result.error) {
+              sendToRef.current(senderId, createMessage('error', { message: result.error }));
+            } else {
+              dispatch({ type: 'SYNC_STATE', payload: result.newState });
+            }
+            break;
+          }
+          default:
+            break;
+        }
+      },
+      onPeerDisconnected: (peerId: string) => {
+        dispatch({ type: 'PLAYER_DISCONNECTED', payload: { id: peerId } });
+      },
+    }),
+    [dispatch],
   );
 
-  const { broadcast } = useHost(peer, handleMessage);
+  const { broadcast, sendTo } = useHost(peer, hostCallbacks);
   const broadcastRef = useRef(broadcast);
   broadcastRef.current = broadcast;
+  sendToRef.current = sendTo;
 
   useEffect(() => {
     if (isReady && peerId) {
-      addPlayer(peerId, session.playerName);
+      dispatch({ type: 'ADD_PLAYER', payload: { id: peerId, name: session.playerName } });
       setScreen('waiting');
     }
-  }, [isReady, peerId, session.playerName, addPlayer, setScreen]);
+  }, [isReady, peerId, session.playerName, dispatch, setScreen]);
 
   useEffect(() => {
-    broadcastRef.current(
-      createMessage('state_sync', {
-        state: {
-          gameId: session.gameId,
-          hostId: session.gameId,
-          phase: 'waiting',
-          settings: {
-            mode: 'score',
-            initialScore: 100,
-            minWordLength: 2,
-            maxWordLength: 0,
-            initialLives: 3,
-            turnTimerSeconds: 15,
-          },
-          players: playersRef.current,
-          turnOrder: [],
-          currentTurnIndex: 0,
-          wordHistory: [],
-          lastWord: null,
-          turnDeadline: null,
-          eliminatedPlayers: [],
-          winner: null,
-        },
-      }),
-    );
-  }, [players, session.gameId]);
+    if (state.phase !== 'lobby') {
+      broadcastRef.current(createMessage('state_sync', { state }));
+    }
+    if (state.phase === 'waiting') setScreen('waiting');
+    if (state.phase === 'playing') setScreen('playing');
+    if (state.phase === 'finished') setScreen('finished');
+  }, [state, setScreen]);
+
+  const handleUpdateSettings = useCallback(
+    (patch: Partial<GameSettings>) => {
+      dispatch({ type: 'UPDATE_SETTINGS', payload: patch });
+    },
+    [dispatch],
+  );
+
+  const handleStartGame = useCallback(() => {
+    dispatch({ type: 'START_GAME' });
+  }, [dispatch]);
+
+  const handleEndGame = useCallback(() => {
+    dispatch({ type: 'RESET_TO_WAITING' });
+  }, [dispatch]);
+
+  const handleHostSubmitWord = useCallback(
+    (word: string) => {
+      if (!peerId) return;
+      const result = processWord(stateRef.current, peerId, word);
+      if (result.error) {
+        setMoveError(result.error);
+      } else {
+        setMoveError(null);
+        dispatch({ type: 'SYNC_STATE', payload: result.newState });
+      }
+    },
+    [peerId, dispatch],
+  );
 
   if (error) {
     return (
@@ -170,13 +199,40 @@ function HostSession({
       <WaitingRoom
         gameId={session.gameId}
         inviteUrl={buildInviteUrl(session.gameId)}
-        players={players}
+        players={state.players}
+        settings={state.settings}
         localPlayerId={peerId}
         isHost={true}
-        onStartGame={() => {
-          // Phase 5 will implement this
-        }}
+        onStartGame={handleStartGame}
         onLeave={onLeave}
+        onUpdateSettings={handleUpdateSettings}
+      />
+    );
+  }
+
+  if (screen === 'playing') {
+    return (
+      <GameBoard
+        state={state}
+        localPlayerId={peerId}
+        isHost={true}
+        moveError={moveError}
+        onSubmitWord={handleHostSubmitWord}
+        onEndGame={handleEndGame}
+      />
+    );
+  }
+
+  if (screen === 'finished') {
+    return (
+      <GameOverScreen
+        players={state.players}
+        settings={state.settings}
+        winnerId={state.winner}
+        localPlayerId={peerId}
+        isHost={true}
+        onBackToLobby={onLeave}
+        onBackToWaiting={handleEndGame}
       />
     );
   }
@@ -196,21 +252,27 @@ function ClientSession({
   onLeave: () => void;
 }) {
   const { peer, peerId, error: peerError, isReady } = usePeer();
-  const [players, setPlayers] = useState<Player[]>([]);
+  const { state, dispatch } = useGame();
   const sentJoinRef = useRef(false);
+  const [moveError, setMoveError] = useState<string | null>(null);
 
   const handleMessage = useCallback(
     (msg: PeerMessage) => {
-      if (msg.type === 'state_sync') {
-        setPlayers(msg.payload.state.players);
-        if (msg.payload.state.phase === 'waiting') {
-          setScreen('waiting');
-        }
-      } else if (msg.type === 'error') {
-        console.error('Host error:', msg.payload.message);
+      switch (msg.type) {
+        case 'state_sync':
+          dispatch({ type: 'SYNC_STATE', payload: msg.payload.state });
+          if (msg.payload.state.phase === 'waiting') setScreen('waiting');
+          else if (msg.payload.state.phase === 'playing') setScreen('playing');
+          else if (msg.payload.state.phase === 'finished') setScreen('finished');
+          break;
+        case 'error':
+          setMoveError(msg.payload.message);
+          break;
+        default:
+          break;
       }
     },
-    [setScreen],
+    [dispatch, setScreen],
   );
 
   const { status, send } = useClient(
@@ -218,6 +280,8 @@ function ClientSession({
     session.gameId,
     handleMessage,
   );
+  const sendRef = useRef(send);
+  sendRef.current = send;
 
   useEffect(() => {
     if (status === 'connected' && peerId && !sentJoinRef.current) {
@@ -225,6 +289,15 @@ function ClientSession({
       send(createMessage('player_join', { playerId: peerId, name: session.playerName }));
     }
   }, [status, peerId, session.playerName, send]);
+
+  const handleClientSubmitWord = useCallback(
+    (word: string) => {
+      if (!peerId) return;
+      setMoveError(null);
+      sendRef.current(createMessage('move', { playerId: peerId, word }));
+    },
+    [peerId],
+  );
 
   if (peerError) {
     return (
@@ -269,16 +342,45 @@ function ClientSession({
     );
   }
 
-  if (screen === 'waiting' && peerId) {
+  if (!peerId) return null;
+
+  if (screen === 'waiting') {
     return (
       <WaitingRoom
         gameId={session.gameId}
         inviteUrl={buildInviteUrl(session.gameId)}
-        players={players}
+        players={state.players}
+        settings={state.settings}
         localPlayerId={peerId}
         isHost={false}
         onStartGame={() => {}}
         onLeave={onLeave}
+        onUpdateSettings={() => {}}
+      />
+    );
+  }
+
+  if (screen === 'playing') {
+    return (
+      <GameBoard
+        state={state}
+        localPlayerId={peerId}
+        isHost={false}
+        moveError={moveError}
+        onSubmitWord={handleClientSubmitWord}
+      />
+    );
+  }
+
+  if (screen === 'finished') {
+    return (
+      <GameOverScreen
+        players={state.players}
+        settings={state.settings}
+        winnerId={state.winner}
+        localPlayerId={peerId}
+        isHost={false}
+        onBackToLobby={onLeave}
       />
     );
   }

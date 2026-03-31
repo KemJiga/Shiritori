@@ -12,8 +12,7 @@ export interface Player {
 
 export interface GameSettings {
   mode: GameMode;
-  initialScore: number;
-  minWordLength: number;
+  targetScore: number;
   maxWordLength: number;
   initialLives: number;
   turnTimerSeconds: number;
@@ -42,8 +41,7 @@ export interface WordEntry {
 
 export const DEFAULT_SETTINGS: GameSettings = {
   mode: 'score',
-  initialScore: 100,
-  minWordLength: 2,
+  targetScore: 100,
   maxWordLength: 0,
   initialLives: 3,
   turnTimerSeconds: 15,
