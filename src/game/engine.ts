@@ -1,5 +1,69 @@
 import type { GameState } from './types';
 import type { GameAction } from '../store/actions';
+import { validateWord } from './validation';
+
+export interface SubmitWordResult {
+  newState: GameState;
+  error?: string;
+}
+
+export function processWord(state: GameState, playerId: string, word: string): SubmitWordResult {
+  const trimmed = word.trim().toLowerCase();
+
+  const validation = validateWord(
+    trimmed,
+    state.lastWord,
+    state.wordHistory.map((w) => w.word),
+    state.settings.maxWordLength,
+  );
+
+  if (!validation.valid) {
+    return { newState: state, error: validation.error };
+  }
+
+  const currentTurnPlayerId = state.turnOrder[state.currentTurnIndex];
+  if (playerId !== currentTurnPlayerId) {
+    return { newState: state, error: 'Not your turn' };
+  }
+
+  const newWordEntry = { word: trimmed, playerId, timestamp: Date.now() };
+  const newPlayers = state.players.map((p) =>
+    p.id === playerId ? { ...p, score: p.score + trimmed.length } : p,
+  );
+
+  const winner = newPlayers.find(
+    (p) => state.settings.mode === 'score' && p.score >= state.settings.targetScore,
+  );
+
+  if (winner) {
+    return {
+      newState: {
+        ...state,
+        players: newPlayers,
+        wordHistory: [...state.wordHistory, newWordEntry],
+        lastWord: trimmed,
+        phase: 'finished',
+        winner: winner.id,
+      },
+    };
+  }
+
+  const activePlayers = state.turnOrder.filter(
+    (id) => !state.eliminatedPlayers.includes(id),
+  );
+  const nextIndex = (state.currentTurnIndex + 1) % activePlayers.length;
+
+  return {
+    newState: {
+      ...state,
+      players: newPlayers,
+      wordHistory: [...state.wordHistory, newWordEntry],
+      lastWord: trimmed,
+      currentTurnIndex: nextIndex,
+      turnDeadline: null,
+    },
+  };
+}
 
 export function gameReducer(state: GameState, action: GameAction): GameState {
   switch (action.type) {
@@ -73,9 +137,12 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
       };
     }
 
-    case 'SUBMIT_WORD':
+    case 'SUBMIT_WORD': {
+      const result = processWord(state, action.payload.playerId, action.payload.word);
+      return result.newState;
+    }
+
     case 'TIMER_EXPIRED':
-      // Phase 5/6 will implement these
       return state;
 
     case 'SET_PLAYERS':

@@ -1,6 +1,8 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { LobbyPage } from './components/lobby/LobbyPage';
 import { WaitingRoom } from './components/room/WaitingRoom';
+import { GameBoard } from './components/game/GameBoard';
+import { GameOverScreen } from './components/game/GameOverScreen';
 import { GameProvider, useGame } from './store/GameContext';
 import { usePeer } from './network/hooks/usePeer';
 import { useHost } from './network/hooks/useHost';
@@ -8,6 +10,7 @@ import { useClient } from './network/hooks/useClient';
 import { createMessage } from './network/protocol';
 import type { PeerMessage } from './network/protocol';
 import type { GameSettings } from './game/types';
+import { processWord } from './game/engine';
 import { generateGameId, buildInviteUrl } from './utils/id';
 
 type AppScreen = 'lobby' | 'connecting' | 'waiting' | 'playing' | 'finished';
@@ -86,6 +89,9 @@ function HostSession({
   const { state, dispatch } = useGame();
   const stateRef = useRef(state);
   stateRef.current = state;
+  const [moveError, setMoveError] = useState<string | null>(null);
+
+  const sendToRef = useRef<(peerId: string, msg: PeerMessage) => void>(() => {});
 
   const hostCallbacks = useMemo(
     () => ({
@@ -94,8 +100,15 @@ function HostSession({
           case 'player_join':
             dispatch({ type: 'ADD_PLAYER', payload: { id: senderId, name: msg.payload.name } });
             break;
-          case 'settings_update':
+          case 'move': {
+            const result = processWord(stateRef.current, msg.payload.playerId, msg.payload.word);
+            if (result.error) {
+              sendToRef.current(senderId, createMessage('error', { message: result.error }));
+            } else {
+              dispatch({ type: 'SYNC_STATE', payload: result.newState });
+            }
             break;
+          }
           default:
             break;
         }
@@ -107,9 +120,10 @@ function HostSession({
     [dispatch],
   );
 
-  const { broadcast } = useHost(peer, hostCallbacks);
+  const { broadcast, sendTo } = useHost(peer, hostCallbacks);
   const broadcastRef = useRef(broadcast);
   broadcastRef.current = broadcast;
+  sendToRef.current = sendTo;
 
   useEffect(() => {
     if (isReady && peerId) {
@@ -118,12 +132,13 @@ function HostSession({
     }
   }, [isReady, peerId, session.playerName, dispatch, setScreen]);
 
-  // Broadcast full state to all clients whenever state changes
   useEffect(() => {
     if (state.phase !== 'lobby') {
       broadcastRef.current(createMessage('state_sync', { state }));
     }
-  }, [state]);
+    if (state.phase === 'playing') setScreen('playing');
+    if (state.phase === 'finished') setScreen('finished');
+  }, [state, setScreen]);
 
   const handleUpdateSettings = useCallback(
     (patch: Partial<GameSettings>) => {
@@ -135,6 +150,20 @@ function HostSession({
   const handleStartGame = useCallback(() => {
     dispatch({ type: 'START_GAME' });
   }, [dispatch]);
+
+  const handleHostSubmitWord = useCallback(
+    (word: string) => {
+      if (!peerId) return;
+      const result = processWord(stateRef.current, peerId, word);
+      if (result.error) {
+        setMoveError(result.error);
+      } else {
+        setMoveError(null);
+        dispatch({ type: 'SYNC_STATE', payload: result.newState });
+      }
+    },
+    [peerId, dispatch],
+  );
 
   if (error) {
     return (
@@ -176,6 +205,29 @@ function HostSession({
     );
   }
 
+  if (screen === 'playing') {
+    return (
+      <GameBoard
+        state={state}
+        localPlayerId={peerId}
+        moveError={moveError}
+        onSubmitWord={handleHostSubmitWord}
+      />
+    );
+  }
+
+  if (screen === 'finished') {
+    return (
+      <GameOverScreen
+        players={state.players}
+        settings={state.settings}
+        winnerId={state.winner}
+        localPlayerId={peerId}
+        onBackToLobby={onLeave}
+      />
+    );
+  }
+
   return null;
 }
 
@@ -193,22 +245,19 @@ function ClientSession({
   const { peer, peerId, error: peerError, isReady } = usePeer();
   const { state, dispatch } = useGame();
   const sentJoinRef = useRef(false);
+  const [moveError, setMoveError] = useState<string | null>(null);
 
   const handleMessage = useCallback(
     (msg: PeerMessage) => {
       switch (msg.type) {
         case 'state_sync':
           dispatch({ type: 'SYNC_STATE', payload: msg.payload.state });
-          if (msg.payload.state.phase === 'waiting') {
-            setScreen('waiting');
-          } else if (msg.payload.state.phase === 'playing') {
-            setScreen('playing');
-          } else if (msg.payload.state.phase === 'finished') {
-            setScreen('finished');
-          }
+          if (msg.payload.state.phase === 'waiting') setScreen('waiting');
+          else if (msg.payload.state.phase === 'playing') setScreen('playing');
+          else if (msg.payload.state.phase === 'finished') setScreen('finished');
           break;
         case 'error':
-          console.error('Host error:', msg.payload.message);
+          setMoveError(msg.payload.message);
           break;
         default:
           break;
@@ -222,6 +271,8 @@ function ClientSession({
     session.gameId,
     handleMessage,
   );
+  const sendRef = useRef(send);
+  sendRef.current = send;
 
   useEffect(() => {
     if (status === 'connected' && peerId && !sentJoinRef.current) {
@@ -229,6 +280,15 @@ function ClientSession({
       send(createMessage('player_join', { playerId: peerId, name: session.playerName }));
     }
   }, [status, peerId, session.playerName, send]);
+
+  const handleClientSubmitWord = useCallback(
+    (word: string) => {
+      if (!peerId) return;
+      setMoveError(null);
+      sendRef.current(createMessage('move', { playerId: peerId, word }));
+    },
+    [peerId],
+  );
 
   if (peerError) {
     return (
@@ -273,7 +333,9 @@ function ClientSession({
     );
   }
 
-  if (screen === 'waiting' && peerId) {
+  if (!peerId) return null;
+
+  if (screen === 'waiting') {
     return (
       <WaitingRoom
         gameId={session.gameId}
@@ -285,6 +347,29 @@ function ClientSession({
         onStartGame={() => {}}
         onLeave={onLeave}
         onUpdateSettings={() => {}}
+      />
+    );
+  }
+
+  if (screen === 'playing') {
+    return (
+      <GameBoard
+        state={state}
+        localPlayerId={peerId}
+        moveError={moveError}
+        onSubmitWord={handleClientSubmitWord}
+      />
+    );
+  }
+
+  if (screen === 'finished') {
+    return (
+      <GameOverScreen
+        players={state.players}
+        settings={state.settings}
+        winnerId={state.winner}
+        localPlayerId={peerId}
+        onBackToLobby={onLeave}
       />
     );
   }
