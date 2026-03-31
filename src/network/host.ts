@@ -14,9 +14,7 @@ export class HostManager {
   private onMessage: MessageHandler | null = null;
   private onPeerConnected: ConnectionHandler | null = null;
   private onPeerDisconnected: ConnectionHandler | null = null;
-  private onPeerReconnected: ConnectionHandler | null = null;
   private knownPeerIds = new Set<string>();
-  private rejectNewConnections = false;
   private peer: Peer;
 
   constructor(peer: Peer) {
@@ -26,22 +24,10 @@ export class HostManager {
 
   private handleConnection(conn: DataConnection): void {
     conn.on('open', () => {
-      const isReconnect = this.knownPeerIds.has(conn.peer);
-
-      if (this.rejectNewConnections && !isReconnect) {
-        conn.send({ type: 'error', payload: { message: 'Game already in progress' } });
-        setTimeout(() => conn.close(), 500);
-        return;
-      }
-
       this.connections.set(conn.peer, conn);
       this.knownPeerIds.add(conn.peer);
 
-      if (isReconnect) {
-        this.onPeerReconnected?.(conn.peer);
-      } else {
-        this.onPeerConnected?.(conn.peer);
-      }
+      this.onPeerConnected?.(conn.peer);
 
       conn.on('data', (data) => {
         this.onMessage?.(data as PeerMessage, conn.peer);
@@ -69,14 +55,6 @@ export class HostManager {
 
   setOnPeerDisconnected(handler: ConnectionHandler): void {
     this.onPeerDisconnected = handler;
-  }
-
-  setOnPeerReconnected(handler: ConnectionHandler): void {
-    this.onPeerReconnected = handler;
-  }
-
-  setRejectNewConnections(reject: boolean): void {
-    this.rejectNewConnections = reject;
   }
 
   broadcast(message: PeerMessage): void {
