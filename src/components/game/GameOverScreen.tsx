@@ -35,7 +35,7 @@ export function GameOverScreen({
   });
 
   return (
-    <div className="min-h-screen bg-gray-950 flex items-center justify-center p-4 sm:p-6">
+    <div className="flex-1 flex items-center justify-center p-4 sm:p-6">
       <div className="w-full max-w-md text-center space-y-8 animate-scale-in">
         <div>
           <div className="animate-pop-in">

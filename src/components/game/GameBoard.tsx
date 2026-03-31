@@ -28,7 +28,7 @@ export function GameBoard({
   const isSurvival = state.settings.mode === 'survival';
 
   return (
-    <div className="min-h-screen bg-gray-950 flex flex-col animate-fade-in">
+    <div className="flex-1 flex flex-col animate-fade-in">
       <header className="border-b border-gray-800/60 px-4 sm:px-6 py-3 flex items-center justify-between shrink-0">
         <h1 className="text-lg font-bold tracking-tight">Shiritori</h1>
         <div className="flex items-center gap-3 sm:gap-4">

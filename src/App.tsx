@@ -14,6 +14,7 @@ import { createMessage } from './network/protocol';
 import type { PeerMessage } from './network/protocol';
 import type { GameSettings } from './game/types';
 import { processWord, processTimerExpired } from './game/engine';
+import { Footer } from './components/shared/Footer';
 import { generateGameId, buildInviteUrl } from './utils/id';
 
 type AppScreen = 'lobby' | 'connecting' | 'waiting' | 'playing' | 'finished';
@@ -46,16 +47,27 @@ function App() {
     window.history.replaceState({}, '', window.location.pathname);
   }, []);
 
+  let content;
+
   if (screen === 'lobby' || !session) {
-    return (
+    content = (
       <LobbyPage onCreateGame={handleCreateGame} onJoinGame={handleJoinGame} />
     );
-  }
-
-  if (session.role === 'host') {
-    return (
+  } else if (session.role === 'host') {
+    content = (
       <GameProvider gameId={session.gameId} hostId={session.gameId}>
         <HostSession
+          session={session}
+          screen={screen}
+          setScreen={setScreen}
+          onLeave={handleLeave}
+        />
+      </GameProvider>
+    );
+  } else {
+    content = (
+      <GameProvider gameId={session.gameId} hostId={session.gameId}>
+        <ClientSession
           session={session}
           screen={screen}
           setScreen={setScreen}
@@ -66,14 +78,12 @@ function App() {
   }
 
   return (
-    <GameProvider gameId={session.gameId} hostId={session.gameId}>
-      <ClientSession
-        session={session}
-        screen={screen}
-        setScreen={setScreen}
-        onLeave={handleLeave}
-      />
-    </GameProvider>
+    <div className="min-h-screen bg-gray-950 text-gray-100 flex flex-col">
+      <div className="flex-1 flex flex-col">
+        {content}
+      </div>
+      <Footer />
+    </div>
   );
 }
 
@@ -258,7 +268,7 @@ function HostSession({
 
   if (error) {
     return (
-      <div className="min-h-screen bg-gray-950 text-gray-100 flex items-center justify-center p-6">
+      <div className="flex-1 flex items-center justify-center p-6">
         <div className="text-center space-y-4">
           <p className="text-red-400 text-lg">Failed to create game: {error}</p>
           <button
@@ -274,7 +284,7 @@ function HostSession({
 
   if (screen === 'connecting' || !peerId) {
     return (
-      <div className="min-h-screen bg-gray-950 text-gray-100 flex items-center justify-center">
+      <div className="flex-1 flex items-center justify-center">
         <p className="text-yellow-400 text-lg animate-pulse">Creating game...</p>
       </div>
     );
@@ -418,7 +428,7 @@ function ClientSession({
 
   if (peerError) {
     return (
-      <div className="min-h-screen bg-gray-950 text-gray-100 flex items-center justify-center p-6">
+      <div className="flex-1 flex items-center justify-center p-6">
         <div className="text-center space-y-4">
           <p className="text-red-400 text-lg">Connection error: {peerError}</p>
           <button
@@ -439,7 +449,7 @@ function ClientSession({
         : 'Connecting to game...';
 
     return (
-      <div className="min-h-screen bg-gray-950 text-gray-100 flex items-center justify-center p-6">
+      <div className="flex-1 flex items-center justify-center p-6">
         <div className="text-center space-y-4">
           <p
             className={`text-lg ${status === 'failed' ? 'text-red-400' : 'text-yellow-400 animate-pulse'}`}
