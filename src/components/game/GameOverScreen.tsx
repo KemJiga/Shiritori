@@ -8,6 +8,7 @@ interface GameOverScreenProps {
   isHost: boolean;
   onBackToLobby: () => void;
   onBackToWaiting?: () => void;
+  onRematch?: () => void;
 }
 
 const podiumColors = [
@@ -24,6 +25,7 @@ export function GameOverScreen({
   isHost,
   onBackToLobby,
   onBackToWaiting,
+  onRematch,
 }: GameOverScreenProps) {
   const winner = players.find((p) => p.id === winnerId);
   const isLocalWinner = winnerId === localPlayerId;
@@ -95,12 +97,20 @@ export function GameOverScreen({
         </div>
 
         <div className="space-y-3 animate-fade-in stagger-3">
+          {isHost && onRematch && (
+            <button
+              onClick={onRematch}
+              className="w-full px-6 py-3.5 bg-indigo-600 hover:bg-indigo-500 active:scale-[0.98] rounded-xl font-semibold text-lg transition-all duration-150 shadow-lg shadow-indigo-600/20"
+            >
+              Rematch
+            </button>
+          )}
           {isHost && onBackToWaiting && (
             <button
               onClick={onBackToWaiting}
-              className="w-full px-6 py-3.5 bg-indigo-600 hover:bg-indigo-500 active:scale-[0.98] rounded-xl font-semibold text-lg transition-all duration-150 shadow-lg shadow-indigo-600/20"
+              className="w-full px-6 py-3 bg-gray-800/80 hover:bg-gray-700 border border-gray-700 rounded-xl font-medium transition-all duration-150 active:scale-[0.98]"
             >
-              Play Again
+              Change Settings
             </button>
           )}
           {!isHost && (

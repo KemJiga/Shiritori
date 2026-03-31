@@ -1,3 +1,5 @@
+import type { GameLanguage } from './dictionary';
+
 export type GameMode = 'score' | 'survival';
 export type GamePhase = 'lobby' | 'waiting' | 'playing' | 'finished';
 export type PlayerStatus = 'connected' | 'disconnected' | 'eliminated';
@@ -12,6 +14,7 @@ export interface Player {
 
 export interface GameSettings {
   mode: GameMode;
+  language: GameLanguage;
   targetScore: number;
   maxWordLength: number;
   initialLives: number;
@@ -41,6 +44,7 @@ export interface WordEntry {
 
 export const DEFAULT_SETTINGS: GameSettings = {
   mode: 'score',
+  language: 'es',
   targetScore: 100,
   maxWordLength: 0,
   initialLives: 3,

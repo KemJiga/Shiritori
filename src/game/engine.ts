@@ -44,6 +44,7 @@ export function processWord(state: GameState, playerId: string, word: string): S
     state.lastWord,
     state.wordHistory.map((w) => w.word),
     state.settings.maxWordLength,
+    state.settings.language,
   );
 
   if (!validation.valid) {

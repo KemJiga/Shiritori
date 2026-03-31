@@ -1,5 +1,7 @@
 import { useState, useEffect } from 'react';
 import type { GameSettings as GameSettingsType } from '../../game/types';
+import { LANGUAGES } from '../../game/dictionary';
+import type { GameLanguage } from '../../game/dictionary';
 
 interface GameSettingsProps {
   settings: GameSettingsType;
@@ -13,6 +15,38 @@ export function GameSettings({ settings, isHost, onUpdate }: GameSettingsProps) 
       <h2 className="text-sm font-semibold text-gray-400 uppercase tracking-wide">
         Game Settings
       </h2>
+
+      <fieldset>
+        <legend className="block text-sm font-medium text-gray-400 mb-2">Language</legend>
+        <div className="flex flex-wrap gap-2">
+          {LANGUAGES.map((lang) => (
+            <button
+              key={lang.code}
+              type="button"
+              onClick={() => {
+                if (lang.enabled) onUpdate({ language: lang.code as GameLanguage });
+              }}
+              disabled={!isHost || !lang.enabled}
+              aria-pressed={settings.language === lang.code}
+              className={`relative px-3 py-2 rounded-xl text-sm font-medium transition-all duration-150 ${
+                settings.language === lang.code
+                  ? 'bg-indigo-600/20 ring-2 ring-indigo-500/60 text-white'
+                  : lang.enabled
+                    ? 'bg-gray-800/80 text-gray-400 hover:bg-gray-700'
+                    : 'bg-gray-800/40 text-gray-600 cursor-not-allowed'
+              }`}
+            >
+              <span className="mr-1.5">{lang.flag}</span>
+              {lang.label}
+              {!lang.enabled && (
+                <span className="ml-1.5 text-[10px] bg-gray-700/60 text-gray-500 px-1.5 py-0.5 rounded-full">
+                  Soon
+                </span>
+              )}
+            </button>
+          ))}
+        </div>
+      </fieldset>
 
       <fieldset>
         <legend className="block text-sm font-medium text-gray-400 mb-2">Game Mode</legend>

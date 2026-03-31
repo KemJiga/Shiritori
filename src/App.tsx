@@ -318,6 +318,7 @@ function HostSession({
           isHost={true}
           onBackToLobby={onLeave}
           onBackToWaiting={handleEndGame}
+          onRematch={handleStartGame}
         />
       )}
     </>
@@ -341,7 +342,7 @@ function ClientSession({
   const { state, dispatch } = useGame();
   const sentJoinRef = useRef(false);
   const [moveError, setMoveError] = useState<string | null>(null);
-  const [hostLost, setHostLost] = useState(false);
+  const [everConnected, setEverConnected] = useState(false);
   const { toasts, addToast, removeToast } = useToast();
 
   const handleMessage = useCallback(
@@ -355,13 +356,12 @@ function ClientSession({
           break;
         case 'error':
           setMoveError(msg.payload.message);
-          addToast(msg.payload.message, 'error');
           break;
         default:
           break;
       }
     },
-    [dispatch, setScreen, addToast],
+    [dispatch, setScreen],
   );
 
   const { status, send } = useClient(
@@ -372,12 +372,19 @@ function ClientSession({
   const sendRef = useRef(send);
   sendRef.current = send;
 
-  // Detect host disconnect
+  // Track if we ever successfully connected (to distinguish initial connect failure from host leaving)
   useEffect(() => {
-    if (status === 'failed') {
-      setHostLost(true);
-    }
+    if (status === 'connected') setEverConnected(true);
   }, [status]);
+
+  const hostLost = status === 'failed' && everConnected;
+
+  // Auto-redirect to lobby when host disconnects
+  useEffect(() => {
+    if (!hostLost) return;
+    const timer = setTimeout(onLeave, 5000);
+    return () => clearTimeout(timer);
+  }, [hostLost, onLeave]);
 
   // Send join on connect (and re-send on reconnect)
   useEffect(() => {
