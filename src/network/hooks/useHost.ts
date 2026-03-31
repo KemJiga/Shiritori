@@ -7,6 +7,7 @@ interface UseHostCallbacks {
   onMessage?: (message: PeerMessage, senderId: string) => void;
   onPeerConnected?: (peerId: string) => void;
   onPeerDisconnected?: (peerId: string) => void;
+  onPeerReconnected?: (peerId: string) => void;
 }
 
 interface UseHostResult {
@@ -14,6 +15,7 @@ interface UseHostResult {
   connectedPeers: string[];
   broadcast: (message: PeerMessage) => void;
   sendTo: (peerId: string, message: PeerMessage) => void;
+  setRejectNewConnections: (reject: boolean) => void;
 }
 
 export function useHost(
@@ -41,6 +43,11 @@ export function useHost(
       cbRef.current?.onPeerDisconnected?.(peerId);
     });
 
+    manager.setOnPeerReconnected((peerId) => {
+      setConnectedPeers(manager.getConnectedPeerIds());
+      cbRef.current?.onPeerReconnected?.(peerId);
+    });
+
     manager.setOnMessage((msg, senderId) => {
       cbRef.current?.onMessage?.(msg, senderId);
     });
@@ -59,10 +66,15 @@ export function useHost(
     managerRef.current?.sendTo(peerId, message);
   }, []);
 
+  const setRejectNewConnections = useCallback((reject: boolean) => {
+    managerRef.current?.setRejectNewConnections(reject);
+  }, []);
+
   return {
     hostManager: managerRef.current,
     connectedPeers,
     broadcast,
     sendTo,
+    setRejectNewConnections,
   };
 }
