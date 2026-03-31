@@ -10,7 +10,7 @@ import { useClient } from './network/hooks/useClient';
 import { createMessage } from './network/protocol';
 import type { PeerMessage } from './network/protocol';
 import type { GameSettings } from './game/types';
-import { processWord } from './game/engine';
+import { processWord, processTimerExpired } from './game/engine';
 import { generateGameId, buildInviteUrl } from './utils/id';
 
 type AppScreen = 'lobby' | 'connecting' | 'waiting' | 'playing' | 'finished';
@@ -140,6 +140,29 @@ function HostSession({
     if (state.phase === 'playing') setScreen('playing');
     if (state.phase === 'finished') setScreen('finished');
   }, [state, setScreen]);
+
+  // Host-side timer: check turnDeadline and dispatch TIMER_EXPIRED
+  useEffect(() => {
+    if (
+      state.phase !== 'playing' ||
+      state.settings.mode !== 'survival' ||
+      !state.turnDeadline
+    ) {
+      return;
+    }
+
+    const check = () => {
+      if (Date.now() >= (stateRef.current.turnDeadline ?? Infinity)) {
+        const newState = processTimerExpired(stateRef.current);
+        if (newState !== stateRef.current) {
+          dispatch({ type: 'SYNC_STATE', payload: newState });
+        }
+      }
+    };
+
+    const interval = setInterval(check, 500);
+    return () => clearInterval(interval);
+  }, [state.phase, state.settings.mode, state.turnDeadline, dispatch]);
 
   const handleUpdateSettings = useCallback(
     (patch: Partial<GameSettings>) => {

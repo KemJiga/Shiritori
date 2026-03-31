@@ -1,6 +1,7 @@
 import { ScoreBoard } from './ScoreBoard';
 import { WordHistory } from './WordHistory';
 import { TurnInput } from './TurnInput';
+import { TimerDisplay } from './TimerDisplay';
 import type { GameState } from '../../game/types';
 
 interface GameBoardProps {
@@ -24,6 +25,7 @@ export function GameBoard({
   const isMyTurn = currentTurnPlayerId === localPlayerId;
   const currentPlayerName =
     state.players.find((p) => p.id === currentTurnPlayerId)?.name ?? '...';
+  const isSurvival = state.settings.mode === 'survival';
 
   return (
     <div className="min-h-screen bg-gray-950 text-gray-100 flex flex-col">
@@ -31,8 +33,8 @@ export function GameBoard({
         <h1 className="text-lg font-bold">Shiritori</h1>
         <div className="flex items-center gap-4">
           <span className="text-sm text-gray-400">
-            {state.settings.mode === 'score' ? 'Score Mode' : 'Survival Mode'} &middot;
-            Target: {state.settings.targetScore}
+            {isSurvival ? 'Survival Mode' : 'Score Mode'}
+            {!isSurvival && <> &middot; Target: {state.settings.targetScore}</>}
           </span>
           {isHost && onEndGame && (
             <button
@@ -56,18 +58,26 @@ export function GameBoard({
         </aside>
 
         <main className="flex-1 flex flex-col p-4 overflow-hidden">
-          <div className="mb-3">
-            <p className={`text-sm font-medium ${isMyTurn ? 'text-indigo-400' : 'text-gray-400'}`}>
-              {isMyTurn ? "Your turn!" : `${currentPlayerName}'s turn`}
-            </p>
-            {state.lastWord && (
-              <p className="text-xs text-gray-500 mt-0.5">
-                Last word: <span className="text-gray-300 font-mono">{state.lastWord}</span>
-                {' '}&rarr; next word must start with{' '}
-                <span className="text-indigo-400 font-bold">
-                  {state.lastWord[state.lastWord.length - 1].toUpperCase()}
-                </span>
+          <div className="mb-3 flex items-start justify-between gap-4">
+            <div>
+              <p className={`text-sm font-medium ${isMyTurn ? 'text-indigo-400' : 'text-gray-400'}`}>
+                {isMyTurn ? "Your turn!" : `${currentPlayerName}'s turn`}
               </p>
+              {state.lastWord && (
+                <p className="text-xs text-gray-500 mt-0.5">
+                  Last word: <span className="text-gray-300 font-mono">{state.lastWord}</span>
+                  {' '}&rarr; next word must start with{' '}
+                  <span className="text-indigo-400 font-bold">
+                    {state.lastWord[state.lastWord.length - 1].toUpperCase()}
+                  </span>
+                </p>
+              )}
+            </div>
+            {isSurvival && (
+              <TimerDisplay
+                deadline={state.turnDeadline}
+                totalSeconds={state.settings.turnTimerSeconds}
+              />
             )}
           </div>
 
