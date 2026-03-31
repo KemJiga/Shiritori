@@ -7,6 +7,35 @@ export interface SubmitWordResult {
   error?: string;
 }
 
+function getNextTurnIndex(state: GameState): number {
+  const activeTurnOrder = state.turnOrder.filter(
+    (id) => !state.eliminatedPlayers.includes(id),
+  );
+  if (activeTurnOrder.length === 0) return 0;
+
+  const currentId = state.turnOrder[state.currentTurnIndex];
+  const currentActiveIdx = activeTurnOrder.indexOf(currentId);
+  const nextActiveIdx = (currentActiveIdx + 1) % activeTurnOrder.length;
+  const nextId = activeTurnOrder[nextActiveIdx];
+
+  return state.turnOrder.indexOf(nextId);
+}
+
+function computeDeadline(state: GameState): number | null {
+  if (state.settings.mode === 'survival') {
+    return Date.now() + state.settings.turnTimerSeconds * 1000;
+  }
+  return null;
+}
+
+function checkSurvivalWinner(state: GameState): string | null {
+  const alive = state.players.filter(
+    (p) => !state.eliminatedPlayers.includes(p.id) && p.status !== 'eliminated',
+  );
+  if (alive.length === 1) return alive[0].id;
+  return null;
+}
+
 export function processWord(state: GameState, playerId: string, word: string): SubmitWordResult {
   const trimmed = word.trim().toLowerCase();
 
@@ -15,6 +44,7 @@ export function processWord(state: GameState, playerId: string, word: string): S
     state.lastWord,
     state.wordHistory.map((w) => w.word),
     state.settings.maxWordLength,
+    state.settings.language,
   );
 
   if (!validation.valid) {
@@ -27,41 +57,104 @@ export function processWord(state: GameState, playerId: string, word: string): S
   }
 
   const newWordEntry = { word: trimmed, playerId, timestamp: Date.now() };
-  const newPlayers = state.players.map((p) =>
-    p.id === playerId ? { ...p, score: p.score + trimmed.length } : p,
-  );
 
-  const winner = newPlayers.find(
-    (p) => state.settings.mode === 'score' && p.score >= state.settings.targetScore,
-  );
+  if (state.settings.mode === 'score') {
+    const newPlayers = state.players.map((p) =>
+      p.id === playerId ? { ...p, score: p.score + trimmed.length } : p,
+    );
 
-  if (winner) {
-    return {
-      newState: {
-        ...state,
-        players: newPlayers,
-        wordHistory: [...state.wordHistory, newWordEntry],
-        lastWord: trimmed,
-        phase: 'finished',
-        winner: winner.id,
-      },
-    };
-  }
+    const winner = newPlayers.find(
+      (p) => p.score >= state.settings.targetScore,
+    );
 
-  const activePlayers = state.turnOrder.filter(
-    (id) => !state.eliminatedPlayers.includes(id),
-  );
-  const nextIndex = (state.currentTurnIndex + 1) % activePlayers.length;
+    if (winner) {
+      return {
+        newState: {
+          ...state,
+          players: newPlayers,
+          wordHistory: [...state.wordHistory, newWordEntry],
+          lastWord: trimmed,
+          phase: 'finished',
+          winner: winner.id,
+        },
+      };
+    }
 
-  return {
-    newState: {
+    const nextState = {
       ...state,
       players: newPlayers,
       wordHistory: [...state.wordHistory, newWordEntry],
       lastWord: trimmed,
+    };
+    const nextIndex = getNextTurnIndex(nextState);
+
+    return {
+      newState: {
+        ...nextState,
+        currentTurnIndex: nextIndex,
+        turnDeadline: null,
+      },
+    };
+  }
+
+  // Survival mode: valid word just advances the turn and resets timer
+  const nextState = {
+    ...state,
+    wordHistory: [...state.wordHistory, newWordEntry],
+    lastWord: trimmed,
+  };
+  const nextIndex = getNextTurnIndex(nextState);
+
+  return {
+    newState: {
+      ...nextState,
       currentTurnIndex: nextIndex,
-      turnDeadline: null,
+      turnDeadline: computeDeadline(nextState),
     },
+  };
+}
+
+export function processTimerExpired(state: GameState): GameState {
+  if (state.phase !== 'playing' || state.settings.mode !== 'survival') return state;
+
+  const currentPlayerId = state.turnOrder[state.currentTurnIndex];
+  if (!currentPlayerId) return state;
+
+  const newPlayers = state.players.map((p) =>
+    p.id === currentPlayerId ? { ...p, lives: p.lives - 1 } : p,
+  );
+
+  const eliminatedPlayer = newPlayers.find((p) => p.id === currentPlayerId && p.lives <= 0);
+  const newEliminated = eliminatedPlayer
+    ? [...state.eliminatedPlayers, currentPlayerId]
+    : state.eliminatedPlayers;
+
+  const newPlayersWithStatus = newPlayers.map((p) =>
+    newEliminated.includes(p.id) ? { ...p, status: 'eliminated' as const } : p,
+  );
+
+  const intermediateState: GameState = {
+    ...state,
+    players: newPlayersWithStatus,
+    eliminatedPlayers: newEliminated,
+  };
+
+  const winner = checkSurvivalWinner(intermediateState);
+  if (winner) {
+    return {
+      ...intermediateState,
+      phase: 'finished',
+      winner,
+      turnDeadline: null,
+    };
+  }
+
+  const nextIndex = getNextTurnIndex(intermediateState);
+
+  return {
+    ...intermediateState,
+    currentTurnIndex: nextIndex,
+    turnDeadline: computeDeadline(intermediateState),
   };
 }
 
@@ -120,7 +213,7 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
 
     case 'START_GAME': {
       const activePlayers = state.players.filter((p) => p.status === 'connected');
-      return {
+      const newState: GameState = {
         ...state,
         phase: 'playing',
         turnOrder: activePlayers.map((p) => p.id),
@@ -135,6 +228,12 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
           lives: state.settings.initialLives,
         })),
       };
+      return {
+        ...newState,
+        turnDeadline: state.settings.mode === 'survival'
+          ? Date.now() + state.settings.turnTimerSeconds * 1000
+          : null,
+      };
     }
 
     case 'SUBMIT_WORD': {
@@ -143,7 +242,7 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
     }
 
     case 'TIMER_EXPIRED':
-      return state;
+      return processTimerExpired(state);
 
     case 'RESET_TO_WAITING':
       return {

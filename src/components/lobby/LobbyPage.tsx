@@ -23,8 +23,8 @@ export function LobbyPage({ onCreateGame, onJoinGame }: LobbyPageProps) {
   }, []);
 
   return (
-    <div className="min-h-screen bg-gray-950 text-gray-100 flex items-center justify-center p-6">
-      <div className="w-full max-w-md">
+    <div className="flex-1 flex items-center justify-center p-4 sm:p-6">
+      <div className="w-full max-w-md animate-fade-in">
         {view === 'menu' && (
           <LobbyMenu
             onCreate={() => setView('create')}
@@ -33,21 +33,25 @@ export function LobbyPage({ onCreateGame, onJoinGame }: LobbyPageProps) {
         )}
 
         {view === 'create' && (
-          <CreateGameForm
-            onCancel={() => setView('menu')}
-            onCreate={onCreateGame}
-          />
+          <div className="animate-slide-up">
+            <CreateGameForm
+              onCancel={() => setView('menu')}
+              onCreate={onCreateGame}
+            />
+          </div>
         )}
 
         {view === 'join' && (
-          <JoinGameForm
-            initialGameId={inviteGameId ?? undefined}
-            onCancel={() => {
-              setInviteGameId(null);
-              setView('menu');
-            }}
-            onJoin={onJoinGame}
-          />
+          <div className="animate-slide-up">
+            <JoinGameForm
+              initialGameId={inviteGameId ?? undefined}
+              onCancel={() => {
+                setInviteGameId(null);
+                setView('menu');
+              }}
+              onJoin={onJoinGame}
+            />
+          </div>
         )}
       </div>
     </div>
@@ -62,29 +66,36 @@ function LobbyMenu({
   onJoin: () => void;
 }) {
   return (
-    <div className="text-center space-y-8">
-      <div>
-        <h1 className="text-5xl font-bold mb-2">Shiritori</h1>
-        <p className="text-gray-400">The word chain game</p>
+    <div className="text-center space-y-10">
+      <div className="animate-slide-up">
+        <div className="inline-flex items-center justify-center w-20 h-20 rounded-2xl bg-indigo-600/20 mb-6">
+          <span className="text-4xl" role="img" aria-label="word chain">
+            🔗
+          </span>
+        </div>
+        <h1 className="text-5xl sm:text-6xl font-extrabold tracking-tight bg-gradient-to-r from-indigo-400 to-purple-400 bg-clip-text text-transparent">
+          Shiritori
+        </h1>
+        <p className="text-gray-400 mt-2 text-lg">The word chain game</p>
       </div>
 
-      <div className="space-y-4">
+      <div className="space-y-3 animate-slide-up stagger-2">
         <button
           onClick={onCreate}
-          className="w-full px-6 py-4 bg-indigo-600 hover:bg-indigo-700 rounded-xl font-medium text-lg transition-colors"
+          className="w-full px-6 py-4 bg-indigo-600 hover:bg-indigo-500 active:scale-[0.98] rounded-xl font-semibold text-lg transition-all duration-150 shadow-lg shadow-indigo-600/20"
         >
           Create Game
         </button>
         <button
           onClick={onJoin}
-          className="w-full px-6 py-4 bg-gray-800 hover:bg-gray-700 border border-gray-700 rounded-xl font-medium text-lg transition-colors"
+          className="w-full px-6 py-4 bg-gray-800/80 hover:bg-gray-700 active:scale-[0.98] border border-gray-700 rounded-xl font-semibold text-lg transition-all duration-150"
         >
           Join Game
         </button>
       </div>
 
-      <p className="text-xs text-gray-600">
-        Peer-to-peer &middot; No account required
+      <p className="text-xs text-gray-600 animate-fade-in stagger-3">
+        Peer-to-peer &middot; No account required &middot; Free
       </p>
     </div>
   );

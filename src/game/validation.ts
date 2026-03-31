@@ -1,13 +1,19 @@
+import type { GameLanguage } from './dictionary';
+import { isValidDictionaryWord } from './dictionary';
+
 export interface ValidationResult {
   valid: boolean;
   error?: string;
 }
+
+const LETTER_PATTERN = /^[a-záéíóúüñ]+$/;
 
 export function validateWord(
   word: string,
   lastWord: string | null,
   wordHistory: string[],
   maxWordLength: number,
+  language: GameLanguage,
 ): ValidationResult {
   const trimmed = word.trim().toLowerCase();
 
@@ -15,7 +21,7 @@ export function validateWord(
     return { valid: false, error: 'Word cannot be empty' };
   }
 
-  if (!/^[a-z]+$/.test(trimmed)) {
+  if (!LETTER_PATTERN.test(trimmed)) {
     return { valid: false, error: 'Word must contain only letters' };
   }
 
@@ -40,6 +46,10 @@ export function validateWord(
   const lowerHistory = wordHistory.map((w) => w.toLowerCase());
   if (lowerHistory.includes(trimmed)) {
     return { valid: false, error: 'Word already used' };
+  }
+
+  if (!isValidDictionaryWord(trimmed, language)) {
+    return { valid: false, error: 'Word not found in dictionary' };
   }
 
   return { valid: true };

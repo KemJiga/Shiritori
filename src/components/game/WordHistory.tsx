@@ -18,29 +18,34 @@ export function WordHistory({ wordHistory, players }: WordHistoryProps) {
 
   if (wordHistory.length === 0) {
     return (
-      <div className="flex-1 flex items-center justify-center text-gray-500 text-sm">
-        No words played yet. The first player can start with any word!
+      <div className="flex-1 flex items-center justify-center text-gray-600 text-sm select-none" aria-label="No words yet">
+        <div className="text-center space-y-2">
+          <span className="text-3xl block" role="img" aria-hidden="true">&#9997;</span>
+          <p>No words played yet</p>
+          <p className="text-xs text-gray-700">The first player can start with any word!</p>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="flex-1 overflow-y-auto space-y-1 pr-1">
+    <div className="flex-1 overflow-y-auto space-y-1 pr-1 min-h-0" role="log" aria-label="Word history">
       {wordHistory.map((entry, i) => {
         const highlight = entry.word[entry.word.length - 1];
+        const isNew = i === wordHistory.length - 1;
         return (
           <div
             key={i}
-            className="flex items-baseline gap-2 text-sm"
+            className={`flex items-baseline gap-2 text-sm py-0.5 ${isNew ? 'animate-slide-up' : ''}`}
           >
-            <span className="text-gray-500 shrink-0 w-16 text-right text-xs">
+            <span className="text-gray-600 shrink-0 w-16 text-right text-xs truncate">
               {getPlayerName(entry.playerId)}
             </span>
-            <span className="font-medium text-gray-200">
+            <span className="font-medium text-gray-300">
               {entry.word.slice(0, -1)}
               <span className="text-indigo-400 font-bold">{highlight}</span>
             </span>
-            <span className="text-xs text-gray-600">+{entry.word.length}</span>
+            <span className="text-[10px] text-gray-700 font-mono">+{entry.word.length}</span>
           </div>
         );
       })}
