@@ -2,9 +2,6 @@ import type Peer from 'peerjs';
 import type { DataConnection } from 'peerjs';
 import type { PeerMessage } from './protocol';
 
-const MAX_RECONNECT_ATTEMPTS = 3;
-const BASE_RECONNECT_DELAY_MS = 1000;
-
 export type ClientMessageHandler = (message: PeerMessage) => void;
 export type ClientStatusHandler = (status: ClientStatus) => void;
 
@@ -14,7 +11,6 @@ export class ClientManager {
   private connection: DataConnection | null = null;
   private onMessage: ClientMessageHandler | null = null;
   private onStatusChange: ClientStatusHandler | null = null;
-  private reconnectAttempts = 0;
   private status: ClientStatus = 'disconnected';
   private peer: Peer;
   private hostId: string;
@@ -29,21 +25,18 @@ export class ClientManager {
     try {
       const conn = this.peer.connect(this.hostId, { reliable: true });
       if (!conn) {
-        this.setStatus('disconnected');
-        this.attemptReconnect();
+        this.setStatus('failed');
         return;
       }
       this.setupConnection(conn);
     } catch {
-      this.setStatus('disconnected');
-      this.attemptReconnect();
+      this.setStatus('failed');
     }
   }
 
   private setupConnection(conn: DataConnection): void {
     conn.on('open', () => {
       this.connection = conn;
-      this.reconnectAttempts = 0;
       this.setStatus('connected');
 
       conn.on('data', (data) => {
@@ -53,36 +46,17 @@ export class ClientManager {
       conn.on('close', () => {
         this.connection = null;
         this.setStatus('disconnected');
-        this.attemptReconnect();
       });
 
       conn.on('error', () => {
         this.connection = null;
         this.setStatus('disconnected');
-        this.attemptReconnect();
       });
     });
 
     conn.on('error', () => {
-      this.setStatus('disconnected');
-      this.attemptReconnect();
-    });
-  }
-
-  private attemptReconnect(): void {
-    if (this.reconnectAttempts >= MAX_RECONNECT_ATTEMPTS) {
       this.setStatus('failed');
-      return;
-    }
-
-    this.reconnectAttempts++;
-    const delay = BASE_RECONNECT_DELAY_MS * Math.pow(2, this.reconnectAttempts - 1);
-
-    setTimeout(() => {
-      if (this.status === 'disconnected') {
-        this.connect();
-      }
-    }, delay);
+    });
   }
 
   private setStatus(status: ClientStatus): void {
@@ -111,6 +85,5 @@ export class ClientManager {
   destroy(): void {
     this.connection?.close();
     this.connection = null;
-    this.setStatus('disconnected');
   }
 }

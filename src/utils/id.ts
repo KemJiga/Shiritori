@@ -4,6 +4,7 @@ export function generateGameId(): string {
   return nanoid(8);
 }
 
+
 export function buildInviteUrl(gameId: string): string {
   const base = window.location.origin + window.location.pathname;
   return `${base}?gameId=${gameId}`;

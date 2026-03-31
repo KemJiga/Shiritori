@@ -4,8 +4,7 @@ export type GameAction =
   | { type: 'INIT_STATE'; payload: GameState }
   | { type: 'ADD_PLAYER'; payload: { id: string; name: string } }
   | { type: 'REMOVE_PLAYER'; payload: { id: string } }
-  | { type: 'PLAYER_DISCONNECTED'; payload: { id: string } }
-  | { type: 'PLAYER_RECONNECTED'; payload: { id: string } }
+  | { type: 'PLAYER_LEFT'; payload: { id: string } }
   | { type: 'UPDATE_SETTINGS'; payload: Partial<GameSettings> }
   | { type: 'START_GAME' }
   | { type: 'SUBMIT_WORD'; payload: { playerId: string; word: string } }

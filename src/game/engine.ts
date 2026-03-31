@@ -189,21 +189,51 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
         players: state.players.filter((p) => p.id !== action.payload.id),
       };
 
-    case 'PLAYER_DISCONNECTED':
-      return {
-        ...state,
-        players: state.players.map((p) =>
-          p.id === action.payload.id ? { ...p, status: 'disconnected' as const } : p,
-        ),
-      };
+    case 'PLAYER_LEFT': {
+      const leaverId = action.payload.id;
+      const remainingPlayers = state.players.filter((p) => p.id !== leaverId);
 
-    case 'PLAYER_RECONNECTED':
+      if (state.phase !== 'playing') {
+        return { ...state, players: remainingPlayers };
+      }
+
+      const newTurnOrder = state.turnOrder.filter((id) => id !== leaverId);
+      const newEliminated = state.eliminatedPlayers.filter((id) => id !== leaverId);
+      const activePlayers = newTurnOrder.filter((id) => !newEliminated.includes(id));
+
+      if (activePlayers.length <= 1) {
+        return {
+          ...state,
+          players: remainingPlayers,
+          turnOrder: newTurnOrder,
+          eliminatedPlayers: newEliminated,
+          phase: 'finished',
+          winner: activePlayers[0] ?? null,
+          turnDeadline: null,
+        };
+      }
+
+      let newTurnIndex = state.currentTurnIndex;
+      const wasTheirTurn = state.turnOrder[state.currentTurnIndex] === leaverId;
+      if (wasTheirTurn) {
+        newTurnIndex = newTurnIndex >= newTurnOrder.length ? 0 : newTurnIndex;
+      } else {
+        const oldTurnPlayerId = state.turnOrder[state.currentTurnIndex];
+        const updatedIdx = newTurnOrder.indexOf(oldTurnPlayerId);
+        newTurnIndex = updatedIdx >= 0 ? updatedIdx : 0;
+      }
+
       return {
         ...state,
-        players: state.players.map((p) =>
-          p.id === action.payload.id ? { ...p, status: 'connected' as const } : p,
-        ),
+        players: remainingPlayers,
+        turnOrder: newTurnOrder,
+        eliminatedPlayers: newEliminated,
+        currentTurnIndex: newTurnIndex,
+        turnDeadline: wasTheirTurn && state.settings.mode === 'survival'
+          ? Date.now() + state.settings.turnTimerSeconds * 1000
+          : state.turnDeadline,
       };
+    }
 
     case 'UPDATE_SETTINGS':
       return {
@@ -259,7 +289,7 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
           ...p,
           score: 0,
           lives: state.settings.initialLives,
-          status: p.status === 'eliminated' ? 'connected' as const : p.status,
+          status: 'connected' as const,
         })),
       };
 
