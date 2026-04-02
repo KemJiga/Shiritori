@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { playTimerTickSound } from '../../utils/sfx';
+import { playTimerTickSound, stopTimerSound } from '../../utils/sfx';
 
 interface TimerDisplayProps {
   deadline: number | null;
@@ -15,7 +15,9 @@ export function TimerDisplay({ deadline, totalSeconds, soundEnabled = false }: T
   useEffect(() => {
     if (!deadline) {
       setRemaining(totalSeconds);
-      return;
+      return () => {
+        stopTimerSound();
+      };
     }
 
     const tick = () => {
@@ -25,7 +27,10 @@ export function TimerDisplay({ deadline, totalSeconds, soundEnabled = false }: T
 
     tick();
     const interval = setInterval(tick, 100);
-    return () => clearInterval(interval);
+    return () => {
+      clearInterval(interval);
+      stopTimerSound();
+    };
   }, [deadline, totalSeconds]);
 
   useEffect(() => {

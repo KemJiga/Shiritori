@@ -28,6 +28,12 @@ export function playTimerTickSound(): void {
   void a.play().catch(() => {});
 }
 
+export function stopTimerSound(): void {
+  if (!timerAudio) return;
+  timerAudio.pause();
+  timerAudio.currentTime = 0;
+}
+
 export function playHitSound(): void {
   const a = getHitAudio();
   a.currentTime = 0;

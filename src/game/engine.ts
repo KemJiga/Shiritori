@@ -2,6 +2,13 @@ import type { GameState } from './types';
 import type { GameAction } from '../store/actions';
 import { validateWord } from './validation';
 
+function shuffleInPlace<T>(arr: T[]): void {
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [arr[i], arr[j]] = [arr[j], arr[i]];
+  }
+}
+
 export interface SubmitWordResult {
   newState: GameState;
   error?: string;
@@ -243,10 +250,12 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
 
     case 'START_GAME': {
       const activePlayers = state.players.filter((p) => p.status === 'connected');
+      const turnOrder = activePlayers.map((p) => p.id);
+      shuffleInPlace(turnOrder);
       const newState: GameState = {
         ...state,
         phase: 'playing',
-        turnOrder: activePlayers.map((p) => p.id),
+        turnOrder,
         currentTurnIndex: 0,
         wordHistory: [],
         lastWord: null,

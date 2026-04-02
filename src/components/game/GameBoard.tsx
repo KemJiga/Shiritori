@@ -29,18 +29,27 @@ export function GameBoard({
     state.players.find((p) => p.id === currentTurnPlayerId)?.name ?? '...';
   const isSurvival = state.settings.mode === 'survival';
   const localLives = state.players.find((p) => p.id === localPlayerId)?.lives ?? 0;
-  const prevLivesRef = useRef(localLives);
+  const prevLivesByPlayerRef = useRef<Map<string, number>>(new Map());
 
   useEffect(() => {
-    if (state.phase !== 'playing' || !isSurvival) {
-      prevLivesRef.current = localLives;
+    if (!isSurvival) {
+      prevLivesByPlayerRef.current = new Map(
+        state.players.map((p) => [p.id, p.lives]),
+      );
       return;
     }
-    if (localLives < prevLivesRef.current) {
-      playHitSound();
+    const prev = prevLivesByPlayerRef.current;
+    for (const p of state.players) {
+      const before = prev.get(p.id) ?? p.lives;
+      if (p.lives < before) {
+        playHitSound();
+        break;
+      }
     }
-    prevLivesRef.current = localLives;
-  }, [localLives, state.phase, isSurvival]);
+    prevLivesByPlayerRef.current = new Map(
+      state.players.map((q) => [q.id, q.lives]),
+    );
+  }, [state.players, isSurvival]);
 
   return (
     <div className="flex-1 flex flex-col min-h-0 overflow-hidden animate-fade-in">
