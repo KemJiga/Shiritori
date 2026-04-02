@@ -6,8 +6,8 @@ export function generateGameId(): string {
 
 
 export function buildInviteUrl(gameId: string): string {
-  const base = window.location.origin + window.location.pathname;
-  return `${base}?gameId=${gameId}`;
+  const root = import.meta.env.BASE_URL.replace(/\/$/, '') || '';
+  return `${window.location.origin}${root}/?gameId=${gameId}`;
 }
 
 export function parseGameIdFromUrl(): string | null {

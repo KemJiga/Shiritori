@@ -1,16 +1,14 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { CreateGameForm } from './CreateGameForm';
 import { JoinGameForm } from './JoinGameForm';
-import { parseGameIdFromUrl } from '../../utils/id';
+import { parseGameIdFromUrl, generateGameId } from '../../utils/id';
+import type { GameSessionLocationState } from '../../navigation';
 
 type LobbyView = 'menu' | 'create' | 'join';
 
-interface LobbyPageProps {
-  onCreateGame: (playerName: string) => void;
-  onJoinGame: (playerName: string, gameId: string) => void;
-}
-
-export function LobbyPage({ onCreateGame, onJoinGame }: LobbyPageProps) {
+export function LobbyPage() {
+  const navigate = useNavigate();
   const [view, setView] = useState<LobbyView>('menu');
   const [inviteGameId, setInviteGameId] = useState<string | null>(null);
 
@@ -21,6 +19,25 @@ export function LobbyPage({ onCreateGame, onJoinGame }: LobbyPageProps) {
       setView('join');
     }
   }, []);
+
+  const handleCreateGame = useCallback(
+    (playerName: string) => {
+      const gameId = generateGameId();
+      navigate(`/game/${gameId}/host`, {
+        state: { playerName } satisfies GameSessionLocationState,
+      });
+    },
+    [navigate],
+  );
+
+  const handleJoinGame = useCallback(
+    (playerName: string, gameId: string) => {
+      navigate(`/game/${gameId}/join`, {
+        state: { playerName } satisfies GameSessionLocationState,
+      });
+    },
+    [navigate],
+  );
 
   return (
     <div className="flex-1 flex items-center justify-center p-4 sm:p-6">
@@ -36,7 +53,7 @@ export function LobbyPage({ onCreateGame, onJoinGame }: LobbyPageProps) {
           <div className="animate-slide-up">
             <CreateGameForm
               onCancel={() => setView('menu')}
-              onCreate={onCreateGame}
+              onCreate={handleCreateGame}
             />
           </div>
         )}
@@ -49,7 +66,7 @@ export function LobbyPage({ onCreateGame, onJoinGame }: LobbyPageProps) {
                 setInviteGameId(null);
                 setView('menu');
               }}
-              onJoin={onJoinGame}
+              onJoin={handleJoinGame}
             />
           </div>
         )}

@@ -1,4 +1,13 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+import {
+  Routes,
+  Route,
+  Navigate,
+  Outlet,
+  useNavigate,
+  useParams,
+  useLocation,
+} from 'react-router-dom';
 import { LobbyPage } from './components/lobby/LobbyPage';
 import { WaitingRoom } from './components/room/WaitingRoom';
 import { GameBoard } from './components/game/GameBoard';
@@ -13,92 +22,88 @@ import type { PeerMessage } from './network/protocol';
 import type { GameSettings } from './game/types';
 import { processWord, processTimerExpired } from './game/engine';
 import { Footer } from './components/shared/Footer';
-import { generateGameId, buildInviteUrl } from './utils/id';
+import { buildInviteUrl } from './utils/id';
+import type { GameSessionLocationState } from './navigation';
 
 type AppScreen = 'lobby' | 'connecting' | 'waiting' | 'playing' | 'finished';
-type Role = 'host' | 'client';
 
-interface SessionInfo {
-  role: Role;
-  playerName: string;
-  gameId: string;
-}
-
-function App() {
-  const [screen, setScreen] = useState<AppScreen>('lobby');
-  const [session, setSession] = useState<SessionInfo | null>(null);
-
-  const handleCreateGame = useCallback((playerName: string) => {
-    const gameId = generateGameId();
-    setSession({ role: 'host', playerName, gameId });
-    setScreen('connecting');
-  }, []);
-
-  const handleJoinGame = useCallback((playerName: string, gameId: string) => {
-    setSession({ role: 'client', playerName, gameId });
-    setScreen('connecting');
-  }, []);
-
-  const handleLeave = useCallback(() => {
-    setSession(null);
-    setScreen('lobby');
-    window.history.replaceState({}, '', window.location.pathname);
-  }, []);
-
-  let content;
-
-  if (screen === 'lobby' || !session) {
-    content = (
-      <LobbyPage onCreateGame={handleCreateGame} onJoinGame={handleJoinGame} />
-    );
-  } else if (session.role === 'host') {
-    content = (
-      <GameProvider gameId={session.gameId} hostId={session.gameId}>
-        <HostSession
-          session={session}
-          screen={screen}
-          setScreen={setScreen}
-          onLeave={handleLeave}
-        />
-      </GameProvider>
-    );
-  } else {
-    content = (
-      <GameProvider gameId={session.gameId} hostId={session.gameId}>
-        <ClientSession
-          session={session}
-          screen={screen}
-          setScreen={setScreen}
-          onLeave={handleLeave}
-        />
-      </GameProvider>
-    );
-  }
-
+function LobbyLayout() {
   return (
-    <div className="h-screen min-h-0 bg-gray-950 text-gray-100 flex flex-col overflow-hidden">
+    <div className="min-h-screen bg-gray-950 text-gray-100 flex flex-col">
       <div className="flex-1 flex flex-col min-h-0 min-w-0">
-        {content}
+        <Outlet />
       </div>
       <Footer />
     </div>
   );
 }
 
+function GameSessionLayout() {
+  return (
+    <div className="h-screen min-h-0 bg-gray-950 text-gray-100 flex flex-col overflow-hidden">
+      <div className="flex-1 flex flex-col min-h-0 min-w-0">
+        <Outlet />
+      </div>
+      <Footer />
+    </div>
+  );
+}
+
+function HostSessionRoute() {
+  const { gameId } = useParams();
+  const location = useLocation();
+  const state = location.state as GameSessionLocationState | null;
+
+  if (!gameId || !state?.playerName) {
+    return <Navigate to="/" replace />;
+  }
+
+  return (
+    <GameProvider gameId={gameId} hostId={gameId}>
+      <HostSession gameId={gameId} playerName={state.playerName} />
+    </GameProvider>
+  );
+}
+
+function ClientSessionRoute() {
+  const { gameId } = useParams();
+  const location = useLocation();
+  const state = location.state as GameSessionLocationState | null;
+
+  if (!gameId || !state?.playerName) {
+    return <Navigate to="/" replace />;
+  }
+
+  return (
+    <GameProvider gameId={gameId} hostId={gameId}>
+      <ClientSession gameId={gameId} playerName={state.playerName} />
+    </GameProvider>
+  );
+}
+
+function App() {
+  return (
+    <Routes>
+      <Route path="/" element={<LobbyLayout />}>
+        <Route index element={<LobbyPage />} />
+      </Route>
+      <Route path="/game/:gameId" element={<GameSessionLayout />}>
+        <Route path="host" element={<HostSessionRoute />} />
+        <Route path="join" element={<ClientSessionRoute />} />
+      </Route>
+      <Route path="*" element={<Navigate to="/" replace />} />
+    </Routes>
+  );
+}
+
 // ─── Host Session ───────────────────────────────────────────────────────────
 
-function HostSession({
-  session,
-  screen,
-  setScreen,
-  onLeave,
-}: {
-  session: SessionInfo;
-  screen: AppScreen;
-  setScreen: (s: AppScreen) => void;
-  onLeave: () => void;
-}) {
-  const { peer, peerId, error, isReady } = usePeer(session.gameId);
+function HostSession({ gameId, playerName }: { gameId: string; playerName: string }) {
+  const navigate = useNavigate();
+  const onLeave = useCallback(() => navigate('/', { replace: true }), [navigate]);
+
+  const [screen, setScreen] = useState<AppScreen>('connecting');
+  const { peer, peerId, error, isReady } = usePeer(gameId);
   const { state, dispatch } = useGame();
   const stateRef = useRef(state);
   stateRef.current = state;
@@ -150,10 +155,10 @@ function HostSession({
 
   useEffect(() => {
     if (isReady && peerId) {
-      dispatch({ type: 'ADD_PLAYER', payload: { id: peerId, name: session.playerName } });
+      dispatch({ type: 'ADD_PLAYER', payload: { id: peerId, name: playerName } });
       setScreen('waiting');
     }
-  }, [isReady, peerId, session.playerName, dispatch, setScreen]);
+  }, [isReady, peerId, playerName, dispatch]);
 
   useEffect(() => {
     if (state.phase !== 'lobby') {
@@ -162,7 +167,7 @@ function HostSession({
     if (state.phase === 'waiting') setScreen('waiting');
     if (state.phase === 'playing') setScreen('playing');
     if (state.phase === 'finished') setScreen('finished');
-  }, [state, setScreen]);
+  }, [state]);
 
   useEffect(() => {
     if (
@@ -239,14 +244,17 @@ function HostSession({
     );
   }
 
+  const sessionScrollClass =
+    screen === 'playing' ? 'overflow-hidden' : 'overflow-y-auto';
+
   return (
-    <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
+    <div className={`flex-1 flex flex-col min-h-0 ${sessionScrollClass}`}>
       <ToastContainer toasts={toasts} onRemove={removeToast} />
 
       {screen === 'waiting' && (
         <WaitingRoom
-          gameId={session.gameId}
-          inviteUrl={buildInviteUrl(session.gameId)}
+          gameId={gameId}
+          inviteUrl={buildInviteUrl(gameId)}
           players={state.players}
           settings={state.settings}
           localPlayerId={peerId}
@@ -287,17 +295,11 @@ function HostSession({
 
 // ─── Client Session ─────────────────────────────────────────────────────────
 
-function ClientSession({
-  session,
-  screen,
-  setScreen,
-  onLeave,
-}: {
-  session: SessionInfo;
-  screen: AppScreen;
-  setScreen: (s: AppScreen) => void;
-  onLeave: () => void;
-}) {
+function ClientSession({ gameId, playerName }: { gameId: string; playerName: string }) {
+  const navigate = useNavigate();
+  const onLeave = useCallback(() => navigate('/', { replace: true }), [navigate]);
+
+  const [screen, setScreen] = useState<AppScreen>('connecting');
   const { peer, peerId, error: peerError, isReady } = usePeer();
   const { state, dispatch } = useGame();
   const sentJoinRef = useRef(false);
@@ -320,18 +322,17 @@ function ClientSession({
           break;
       }
     },
-    [dispatch, setScreen],
+    [dispatch],
   );
 
   const { status, send } = useClient(
     isReady ? peer : null,
-    session.gameId,
+    gameId,
     handleMessage,
   );
   const sendRef = useRef(send);
   sendRef.current = send;
 
-  // On disconnect or failure, go back to lobby
   useEffect(() => {
     if (status === 'disconnected' || status === 'failed') {
       if (sentJoinRef.current) {
@@ -340,13 +341,12 @@ function ClientSession({
     }
   }, [status, onLeave]);
 
-  // Send join once on connect
   useEffect(() => {
     if (status === 'connected' && peerId && !sentJoinRef.current) {
       sentJoinRef.current = true;
-      send(createMessage('player_join', { playerId: peerId, name: session.playerName }));
+      send(createMessage('player_join', { playerId: peerId, name: playerName }));
     }
-  }, [status, peerId, session.playerName, send]);
+  }, [status, peerId, playerName, send]);
 
   const handleClientSubmitWord = useCallback(
     (word: string) => {
@@ -402,14 +402,17 @@ function ClientSession({
 
   if (!peerId) return null;
 
+  const clientSessionScrollClass =
+    screen === 'playing' ? 'overflow-hidden' : 'overflow-y-auto';
+
   return (
-    <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
+    <div className={`flex-1 flex flex-col min-h-0 ${clientSessionScrollClass}`}>
       <ToastContainer toasts={toasts} onRemove={removeToast} />
 
       {screen === 'waiting' && (
         <WaitingRoom
-          gameId={session.gameId}
-          inviteUrl={buildInviteUrl(session.gameId)}
+          gameId={gameId}
+          inviteUrl={buildInviteUrl(gameId)}
           players={state.players}
           settings={state.settings}
           localPlayerId={peerId}

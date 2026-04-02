@@ -30,7 +30,7 @@ export function WaitingRoom({
   const canStart = isHost && connectedPlayers.length >= minPlayersToStart;
 
   return (
-    <div className="flex-1 flex items-center justify-center p-4 sm:p-6">
+    <div className="flex-1 min-h-0 w-full flex justify-center p-4 sm:p-6 py-8 sm:py-10">
       <div className="w-full max-w-lg space-y-5 animate-fade-in">
         <header className="text-center">
           <h1 className="text-2xl sm:text-3xl font-bold">Waiting Room</h1>
