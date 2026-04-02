@@ -5,14 +5,31 @@ interface TurnInputProps {
   lastWord: string | null;
   error: string | null;
   onSubmit: (word: string) => void;
+  isSurvival: boolean;
+  localLives: number;
 }
 
-export function TurnInput({ isMyTurn, lastWord, error, onSubmit }: TurnInputProps) {
+export function TurnInput({
+  isMyTurn,
+  lastWord,
+  error,
+  onSubmit,
+  isSurvival,
+  localLives,
+}: TurnInputProps) {
   const [value, setValue] = useState('');
   const [shaking, setShaking] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
+  const prevLivesRef = useRef(localLives);
 
   const requiredLetter = lastWord ? lastWord[lastWord.length - 1].toUpperCase() : null;
+
+  useEffect(() => {
+    if (isSurvival && localLives < prevLivesRef.current) {
+      setValue('');
+    }
+    prevLivesRef.current = localLives;
+  }, [isSurvival, localLives]);
 
   useEffect(() => {
     if (error) {

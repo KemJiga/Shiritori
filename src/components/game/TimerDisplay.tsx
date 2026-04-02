@@ -1,17 +1,23 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
+import { playTimerTickSound, stopTimerSound } from '../../utils/sfx';
 
 interface TimerDisplayProps {
   deadline: number | null;
   totalSeconds: number;
+  /** When true, play tick SFX on last 5 seconds (countdown). */
+  soundEnabled?: boolean;
 }
 
-export function TimerDisplay({ deadline, totalSeconds }: TimerDisplayProps) {
+export function TimerDisplay({ deadline, totalSeconds, soundEnabled = false }: TimerDisplayProps) {
   const [remaining, setRemaining] = useState(totalSeconds);
+  const prevDisplaySecondsRef = useRef<number | null>(null);
 
   useEffect(() => {
     if (!deadline) {
       setRemaining(totalSeconds);
-      return;
+      return () => {
+        stopTimerSound();
+      };
     }
 
     const tick = () => {
@@ -21,12 +27,37 @@ export function TimerDisplay({ deadline, totalSeconds }: TimerDisplayProps) {
 
     tick();
     const interval = setInterval(tick, 100);
-    return () => clearInterval(interval);
+    return () => {
+      clearInterval(interval);
+      stopTimerSound();
+    };
   }, [deadline, totalSeconds]);
+
+  useEffect(() => {
+    prevDisplaySecondsRef.current = null;
+  }, [deadline]);
+
+  const displaySeconds = Math.ceil(remaining);
+
+  useEffect(() => {
+    if (!deadline || !soundEnabled) {
+      prevDisplaySecondsRef.current = displaySeconds;
+      return;
+    }
+    const prev = prevDisplaySecondsRef.current;
+    if (
+      prev !== null &&
+      displaySeconds < prev &&
+      displaySeconds <= 5 &&
+      displaySeconds >= 0
+    ) {
+      playTimerTickSound();
+    }
+    prevDisplaySecondsRef.current = displaySeconds;
+  }, [deadline, displaySeconds, soundEnabled]);
 
   const fraction = Math.min(remaining / totalSeconds, 1);
   const isUrgent = remaining <= 5;
-  const displaySeconds = Math.ceil(remaining);
 
   const radius = 18;
   const circumference = 2 * Math.PI * radius;

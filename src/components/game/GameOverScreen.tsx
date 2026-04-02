@@ -1,9 +1,13 @@
 import type { Player, GameSettings } from '../../game/types';
 
+/** Rematch UI is off until the flow is ready; keep button markup below. */
+const REMATCH_UI_ENABLED = false;
+
 interface GameOverScreenProps {
   players: Player[];
   settings: GameSettings;
   winnerId: string | null;
+  lastWord: string | null;
   localPlayerId: string;
   isHost: boolean;
   onBackToLobby: () => void;
@@ -21,6 +25,7 @@ export function GameOverScreen({
   players,
   settings,
   winnerId,
+  lastWord,
   localPlayerId,
   isHost,
   onBackToLobby,
@@ -54,6 +59,12 @@ export function GameOverScreen({
                   <span className="text-gray-400">wins!</span>
                 </>
               )}
+            </p>
+          )}
+          {lastWord && (
+            <p className="text-sm text-gray-500 mt-3 animate-fade-in stagger-2">
+              Winning word:{' '}
+              <span className="text-gray-200 font-mono font-semibold">{lastWord}</span>
             </p>
           )}
         </div>
@@ -97,7 +108,7 @@ export function GameOverScreen({
         </div>
 
         <div className="space-y-3 animate-fade-in stagger-3">
-          {isHost && onRematch && (
+          {REMATCH_UI_ENABLED && isHost && onRematch && (
             <button
               onClick={onRematch}
               className="w-full px-6 py-3.5 bg-indigo-600 hover:bg-indigo-500 active:scale-[0.98] rounded-xl font-semibold text-lg transition-all duration-150 shadow-lg shadow-indigo-600/20"
@@ -108,9 +119,9 @@ export function GameOverScreen({
           {isHost && onBackToWaiting && (
             <button
               onClick={onBackToWaiting}
-              className="w-full px-6 py-3 bg-gray-800/80 hover:bg-gray-700 border border-gray-700 rounded-xl font-medium transition-all duration-150 active:scale-[0.98]"
+              className="w-full px-6 py-3 bg-indigo-600 hover:bg-indigo-500 border border-gray-700 rounded-xl font-medium transition-all duration-150 active:scale-[0.98]"
             >
-              Change Settings
+              Play Again
             </button>
           )}
           {!isHost && (
