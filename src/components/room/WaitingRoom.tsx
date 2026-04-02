@@ -51,27 +51,16 @@ export function WaitingRoom({
             {players.map((player, i) => (
               <li
                 key={player.id}
-                className={`flex items-center gap-3 rounded-lg px-4 py-2.5 transition-all duration-200 animate-slide-up ${
-                  player.status === 'disconnected'
-                    ? 'bg-gray-800/40 opacity-60'
-                    : 'bg-gray-800/80'
-                }`}
+                className="flex items-center gap-3 rounded-lg px-4 py-2.5 transition-all duration-200 animate-slide-up bg-gray-800/80"
                 style={{ animationDelay: `${i * 50}ms` }}
               >
                 <span
-                  className={`w-2.5 h-2.5 rounded-full shrink-0 ${
-                    player.status === 'connected'
-                      ? 'bg-emerald-400 shadow-sm shadow-emerald-400/50'
-                      : 'bg-gray-600'
-                  }`}
-                  aria-label={player.status === 'connected' ? 'Online' : 'Offline'}
+                  className="w-2.5 h-2.5 rounded-full shrink-0 bg-emerald-400 shadow-sm shadow-emerald-400/50"
+                  aria-label="Online"
                 />
                 <span className="font-medium truncate">{player.name}</span>
                 {player.id === localPlayerId && (
                   <span className="text-xs text-gray-500">(you)</span>
-                )}
-                {player.status === 'disconnected' && (
-                  <span className="text-xs text-yellow-500 animate-pulse">reconnecting...</span>
                 )}
                 {player.id === players[0]?.id && (
                   <span className="ml-auto text-xs bg-indigo-600/20 text-indigo-400 px-2 py-0.5 rounded-full font-medium">

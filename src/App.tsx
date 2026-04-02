@@ -20,7 +20,9 @@ import { useClient } from './network/hooks/useClient';
 import { createMessage } from './network/protocol';
 import type { PeerMessage } from './network/protocol';
 import type { GameSettings } from './game/types';
-import { processWord, processTimerExpired } from './game/engine';
+import { processWord, processTimerExpired, gameReducer } from './game/engine';
+import { destroyPeer } from './network/peer';
+import { useClientPlayerLeaveOnUnload } from './network/hooks/useGracefulPeerDisconnect';
 import { Footer } from './components/shared/Footer';
 import { buildInviteUrl } from './utils/id';
 import type { GameSessionLocationState } from './navigation';
@@ -100,7 +102,6 @@ function App() {
 
 function HostSession({ gameId, playerName }: { gameId: string; playerName: string }) {
   const navigate = useNavigate();
-  const onLeave = useCallback(() => navigate('/', { replace: true }), [navigate]);
 
   const [screen, setScreen] = useState<AppScreen>('connecting');
   const { peer, peerId, error, isReady } = usePeer(gameId);
@@ -123,6 +124,10 @@ function HostSession({ gameId, playerName }: { gameId: string; playerName: strin
             }
             dispatch({ type: 'ADD_PLAYER', payload: { id: senderId, name: msg.payload.name } });
             addToast(`${msg.payload.name} joined`, 'info');
+            break;
+          }
+          case 'player_leave': {
+            dispatch({ type: 'PLAYER_LEFT', payload: { id: senderId } });
             break;
           }
           case 'move': {
@@ -152,6 +157,34 @@ function HostSession({ gameId, playerName }: { gameId: string; playerName: strin
   const broadcastRef = useRef(broadcast);
   broadcastRef.current = broadcast;
   sendToRef.current = sendTo;
+
+  const hostLeaveAndBroadcast = useCallback(() => {
+    if (!peerId) return;
+    const next = gameReducer(stateRef.current, {
+      type: 'PLAYER_LEFT',
+      payload: { id: peerId },
+    });
+    dispatch({ type: 'SYNC_STATE', payload: next });
+    broadcastRef.current(createMessage('state_sync', { state: next }));
+  }, [peerId, dispatch]);
+
+  const onLeave = useCallback(() => {
+    hostLeaveAndBroadcast();
+    navigate('/', { replace: true });
+  }, [hostLeaveAndBroadcast, navigate]);
+
+  useEffect(() => {
+    if (!peer || !peerId) return;
+
+    const run = () => {
+      if (peer.destroyed) return;
+      hostLeaveAndBroadcast();
+      destroyPeer(peer);
+    };
+
+    window.addEventListener('pagehide', run);
+    return () => window.removeEventListener('pagehide', run);
+  }, [peer, peerId, hostLeaveAndBroadcast]);
 
   useEffect(() => {
     if (isReady && peerId) {
@@ -297,7 +330,6 @@ function HostSession({ gameId, playerName }: { gameId: string; playerName: strin
 
 function ClientSession({ gameId, playerName }: { gameId: string; playerName: string }) {
   const navigate = useNavigate();
-  const onLeave = useCallback(() => navigate('/', { replace: true }), [navigate]);
 
   const [screen, setScreen] = useState<AppScreen>('connecting');
   const { peer, peerId, error: peerError, isReady } = usePeer();
@@ -332,6 +364,22 @@ function ClientSession({ gameId, playerName }: { gameId: string; playerName: str
   );
   const sendRef = useRef(send);
   sendRef.current = send;
+
+  useClientPlayerLeaveOnUnload(peer, peerId, sendRef);
+
+  const notifyLeave = useCallback(() => {
+    if (!peerId) return;
+    try {
+      sendRef.current(createMessage('player_leave', { playerId: peerId }));
+    } catch {
+      /* ignore */
+    }
+  }, [peerId]);
+
+  const onLeave = useCallback(() => {
+    notifyLeave();
+    navigate('/', { replace: true });
+  }, [notifyLeave, navigate]);
 
   useEffect(() => {
     if (status === 'disconnected' || status === 'failed') {
