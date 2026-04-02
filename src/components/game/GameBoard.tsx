@@ -1,8 +1,10 @@
+import { useEffect, useRef } from 'react';
 import { ScoreBoard } from './ScoreBoard';
 import { WordHistory } from './WordHistory';
 import { TurnInput } from './TurnInput';
 import { TimerDisplay } from './TimerDisplay';
 import type { GameState } from '../../game/types';
+import { playHitSound } from '../../utils/sfx';
 
 interface GameBoardProps {
   state: GameState;
@@ -27,6 +29,18 @@ export function GameBoard({
     state.players.find((p) => p.id === currentTurnPlayerId)?.name ?? '...';
   const isSurvival = state.settings.mode === 'survival';
   const localLives = state.players.find((p) => p.id === localPlayerId)?.lives ?? 0;
+  const prevLivesRef = useRef(localLives);
+
+  useEffect(() => {
+    if (state.phase !== 'playing' || !isSurvival) {
+      prevLivesRef.current = localLives;
+      return;
+    }
+    if (localLives < prevLivesRef.current) {
+      playHitSound();
+    }
+    prevLivesRef.current = localLives;
+  }, [localLives, state.phase, isSurvival]);
 
   return (
     <div className="flex-1 flex flex-col min-h-0 overflow-hidden animate-fade-in">
@@ -84,6 +98,7 @@ export function GameBoard({
               <TimerDisplay
                 deadline={state.turnDeadline}
                 totalSeconds={state.settings.turnTimerSeconds}
+                soundEnabled={isMyTurn}
               />
             )}
           </div>
