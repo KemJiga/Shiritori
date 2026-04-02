@@ -4,6 +4,7 @@ interface GameOverScreenProps {
   players: Player[];
   settings: GameSettings;
   winnerId: string | null;
+  lastWord: string | null;
   localPlayerId: string;
   isHost: boolean;
   onBackToLobby: () => void;
@@ -21,6 +22,7 @@ export function GameOverScreen({
   players,
   settings,
   winnerId,
+  lastWord,
   localPlayerId,
   isHost,
   onBackToLobby,
@@ -54,6 +56,12 @@ export function GameOverScreen({
                   <span className="text-gray-400">wins!</span>
                 </>
               )}
+            </p>
+          )}
+          {lastWord && (
+            <p className="text-sm text-gray-500 mt-3 animate-fade-in stagger-2">
+              Winning word:{' '}
+              <span className="text-gray-200 font-mono font-semibold">{lastWord}</span>
             </p>
           )}
         </div>

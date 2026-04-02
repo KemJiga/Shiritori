@@ -76,8 +76,8 @@ function App() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-950 text-gray-100 flex flex-col">
-      <div className="flex-1 flex flex-col">
+    <div className="h-screen min-h-0 bg-gray-950 text-gray-100 flex flex-col overflow-hidden">
+      <div className="flex-1 flex flex-col min-h-0 min-w-0">
         {content}
       </div>
       <Footer />
@@ -240,7 +240,7 @@ function HostSession({
   }
 
   return (
-    <>
+    <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
       <ToastContainer toasts={toasts} onRemove={removeToast} />
 
       {screen === 'waiting' && (
@@ -273,6 +273,7 @@ function HostSession({
           players={state.players}
           settings={state.settings}
           winnerId={state.winner}
+          lastWord={state.lastWord}
           localPlayerId={peerId}
           isHost={true}
           onBackToLobby={onLeave}
@@ -280,7 +281,7 @@ function HostSession({
           onRematch={handleStartGame}
         />
       )}
-    </>
+    </div>
   );
 }
 
@@ -402,7 +403,7 @@ function ClientSession({
   if (!peerId) return null;
 
   return (
-    <>
+    <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
       <ToastContainer toasts={toasts} onRemove={removeToast} />
 
       {screen === 'waiting' && (
@@ -434,12 +435,13 @@ function ClientSession({
           players={state.players}
           settings={state.settings}
           winnerId={state.winner}
+          lastWord={state.lastWord}
           localPlayerId={peerId}
           isHost={false}
           onBackToLobby={onLeave}
         />
       )}
-    </>
+    </div>
   );
 }
 

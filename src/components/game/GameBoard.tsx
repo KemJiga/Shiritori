@@ -26,9 +26,10 @@ export function GameBoard({
   const currentPlayerName =
     state.players.find((p) => p.id === currentTurnPlayerId)?.name ?? '...';
   const isSurvival = state.settings.mode === 'survival';
+  const localLives = state.players.find((p) => p.id === localPlayerId)?.lives ?? 0;
 
   return (
-    <div className="flex-1 flex flex-col animate-fade-in">
+    <div className="flex-1 flex flex-col min-h-0 overflow-hidden animate-fade-in">
       <header className="border-b border-gray-800/60 px-4 sm:px-6 py-3 flex items-center justify-between shrink-0">
         <h1 className="text-lg font-bold tracking-tight">Shiritori</h1>
         <div className="flex items-center gap-3 sm:gap-4">
@@ -47,8 +48,8 @@ export function GameBoard({
         </div>
       </header>
 
-      <div className="flex-1 flex flex-col lg:flex-row overflow-hidden">
-        <aside className="lg:w-64 xl:w-72 border-b lg:border-b-0 lg:border-r border-gray-800/60 p-3 sm:p-4 overflow-y-auto shrink-0">
+      <div className="flex-1 flex flex-col lg:flex-row min-h-0 overflow-hidden">
+        <aside className="lg:w-64 xl:w-72 lg:max-h-none max-h-[40vh] border-b lg:border-b-0 lg:border-r border-gray-800/60 p-3 sm:p-4 overflow-y-auto shrink-0">
           <ScoreBoard
             players={state.players}
             settings={state.settings}
@@ -57,8 +58,8 @@ export function GameBoard({
           />
         </aside>
 
-        <main className="flex-1 flex flex-col p-3 sm:p-4 overflow-hidden min-w-0">
-          <div className="mb-3 flex items-start justify-between gap-3">
+        <main className="flex-1 flex flex-col min-h-0 p-3 sm:p-4 overflow-hidden min-w-0">
+          <div className="mb-3 flex items-start justify-between gap-3 shrink-0">
             <div className="min-w-0">
               <p
                 className={`text-sm font-semibold transition-colors ${
@@ -98,6 +99,8 @@ export function GameBoard({
               lastWord={state.lastWord}
               error={moveError}
               onSubmit={onSubmitWord}
+              isSurvival={isSurvival}
+              localLives={localLives}
             />
           </div>
         </main>
